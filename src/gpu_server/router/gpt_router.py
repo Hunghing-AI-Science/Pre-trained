@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
+import logging
+import os
 from src.gpu_server.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -7,8 +9,11 @@ from src.gpu_server.schemas import (
     ChatMessage,
     Usage
 )
+from src.gpt_oss.gpt_oss_service import get_gpt_service
 import uuid
 import time
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/v1/chat",
@@ -41,7 +46,7 @@ async def create_chat_completion(
             detail="Missing or invalid API key. Expected format: 'Bearer YOUR_API_KEY'"
         )
 
-    ### NO API KEY TEMPORARILY
+    ### NO API KEY VALIDATION TEMPORARILY
     # Extract API key
     # api_key = authorization.replace("Bearer ", "")
     #
@@ -62,37 +67,87 @@ async def create_chat_completion(
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
     current_timestamp = int(time.time())
 
-    # TODO: Process the actual GPT request
-    # This is just the interface - actual processing should be implemented
-    # You would typically:
-    # 1. Call the GPT model service with request parameters
-    # 2. Handle streaming if request.stream is True
-    # 3. Calculate token usage
-    # 4. Format and return the response
+    logger.info(f"Processing chat completion request {completion_id} with model {request.model}")
 
-    # Placeholder response structure
-    response = ChatCompletionResponse(
-        id=completion_id,
-        object="chat.completion",
-        created=current_timestamp,
-        model=request.model,
-        choices=[
-            ChatCompletionChoice(
-                index=0,
-                message=ChatMessage(
-                    role="assistant",
-                    content="[Response placeholder - implement actual GPT processing]"
-                ),
-                finish_reason="stop"
-            )
-        ],
-        usage=Usage(
-            prompt_tokens=0,  # Calculate based on input
-            completion_tokens=0,  # Calculate based on output
-            total_tokens=0
+    try:
+        # Get GPT service instance for the requested model
+        # Map OpenAI model names to actual model identifiers
+        model_map = {
+            'gpt-3.5-turbo': os.getenv('GPT_35_MODEL', 'openai/gpt-oss-20b'),
+            'gpt-4': os.getenv('GPT_4_MODEL', 'openai/gpt-oss-120b'),
+            'openai/gpt-oss-20b': 'openai/gpt-oss-20b',
+            'openai/gpt-oss-120b': 'openai/gpt-oss-120b',
+        }
+
+        actual_model = model_map.get(request.model, request.model)
+        gpt_service = get_gpt_service(actual_model)
+
+        # Convert Pydantic messages to dict format
+        messages_dict = [
+            {"role": msg.role, "content": msg.content}
+            for msg in request.messages
+        ]
+
+        # Generate completion using GPT service
+        result = gpt_service.generate_chat_completion(
+            messages=messages_dict,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            max_tokens=request.max_tokens,
+            stop=request.stop,
+            presence_penalty=request.presence_penalty,
+            frequency_penalty=request.frequency_penalty,
+            n=request.n or 1
         )
-    )
 
-    return response
+        # Handle multiple completions if n > 1
+        if request.n and request.n > 1:
+            choices = [
+                ChatCompletionChoice(
+                    index=i,
+                    message=ChatMessage(
+                        role="assistant",
+                        content=text
+                    ),
+                    finish_reason="stop"
+                )
+                for i, text in enumerate(result["text"])
+            ]
+        else:
+            choices = [
+                ChatCompletionChoice(
+                    index=0,
+                    message=ChatMessage(
+                        role="assistant",
+                        content=result["text"]
+                    ),
+                    finish_reason="stop"
+                )
+            ]
+
+        # Create response
+        response = ChatCompletionResponse(
+            id=completion_id,
+            object="chat.completion",
+            created=current_timestamp,
+            model=request.model,
+            choices=choices,
+            usage=Usage(
+                prompt_tokens=result["prompt_tokens"],
+                completion_tokens=result["completion_tokens"],
+                total_tokens=result["total_tokens"]
+            )
+        )
+
+        logger.info(f"Chat completion {completion_id} completed successfully")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error processing chat completion {completion_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate completion: {str(e)}"
+        )
+
 
 
