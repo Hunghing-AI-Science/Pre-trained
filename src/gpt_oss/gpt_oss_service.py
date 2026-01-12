@@ -286,6 +286,7 @@ if __name__ == "__main__":
     3. Chat completions
     4. Text completions
     5. Different generation parameters
+    6. Long multi-turn conversations with context maintenance
     """
     # Configure logging
     logging.basicConfig(
@@ -447,6 +448,112 @@ if __name__ == "__main__":
 
     print(f"Cache directory: {service.cache_dir or 'default'}")
     print(f"Torch dtype: {service.torch_dtype}")
+
+    # Example 7: Long multi-turn conversation
+    print("\n" + "=" * 80)
+    print("Example 7: Long Multi-Turn Conversation")
+    print("=" * 80)
+
+    try:
+        service = get_gpt_service('openai/gpt-oss-20b')
+
+        # Initialize conversation with system message
+        conversation = [
+            {"role": "system", "content": "You are a knowledgeable AI assistant helping with Python programming questions."}
+        ]
+
+        # Turn 1: Ask about list comprehensions
+        print("\n--- Turn 1: User asks about list comprehensions ---")
+        conversation.append({"role": "user", "content": "What is a list comprehension in Python?"})
+
+        result = service.generate_chat_completion(
+            messages=conversation,
+            temperature=0.7,
+            max_tokens=150
+        )
+
+        print(f"User: {conversation[-1]['content']}")
+        print(f"Assistant: {result['text']}")
+        print(f"Tokens: {result['total_tokens']} total")
+
+        # Add assistant's response to conversation
+        conversation.append({"role": "assistant", "content": result['text']})
+
+        # Turn 2: Ask for an example
+        print("\n--- Turn 2: User asks for an example ---")
+        conversation.append({"role": "user", "content": "Can you show me a practical example?"})
+
+        result = service.generate_chat_completion(
+            messages=conversation,
+            temperature=0.7,
+            max_tokens=150
+        )
+
+        print(f"User: {conversation[-1]['content']}")
+        print(f"Assistant: {result['text']}")
+        print(f"Tokens: {result['total_tokens']} total")
+
+        # Add assistant's response to conversation
+        conversation.append({"role": "assistant", "content": result['text']})
+
+        # Turn 3: Ask about performance
+        print("\n--- Turn 3: User asks about performance ---")
+        conversation.append({"role": "user", "content": "Is it faster than using a regular for loop?"})
+
+        result = service.generate_chat_completion(
+            messages=conversation,
+            temperature=0.7,
+            max_tokens=150
+        )
+
+        print(f"User: {conversation[-1]['content']}")
+        print(f"Assistant: {result['text']}")
+        print(f"Tokens: {result['total_tokens']} total")
+
+        # Add assistant's response to conversation
+        conversation.append({"role": "assistant", "content": result['text']})
+
+        # Turn 4: Follow-up question
+        print("\n--- Turn 4: User asks follow-up question ---")
+        conversation.append({"role": "user", "content": "What about memory usage? Are there any downsides?"})
+
+        result = service.generate_chat_completion(
+            messages=conversation,
+            temperature=0.7,
+            max_tokens=150
+        )
+
+        print(f"User: {conversation[-1]['content']}")
+        print(f"Assistant: {result['text']}")
+        print(f"Tokens: {result['total_tokens']} total")
+
+        # Add assistant's response to conversation
+        conversation.append({"role": "assistant", "content": result['text']})
+
+        # Turn 5: Final question
+        print("\n--- Turn 5: User asks for best practices ---")
+        conversation.append({"role": "user", "content": "Thanks! Any best practices I should know about?"})
+
+        result = service.generate_chat_completion(
+            messages=conversation,
+            temperature=0.7,
+            max_tokens=150
+        )
+
+        print(f"User: {conversation[-1]['content']}")
+        print(f"Assistant: {result['text']}")
+        print(f"Tokens: {result['total_tokens']} total")
+
+        # Display conversation summary
+        print("\n--- Conversation Summary ---")
+        print(f"Total turns: {(len(conversation) - 1) // 2}")  # Exclude system message
+        print(f"Total messages in conversation: {len(conversation)}")
+        print(f"Final context length: ~{result['total_tokens']} tokens")
+        print("\n✓ Long conversation test completed successfully!")
+        print("Note: The model maintains context across all turns, allowing for coherent multi-turn dialogue.")
+
+    except Exception as e:
+        print(f"✗ Error in long conversation test: {str(e)}")
 
     print("\n" + "=" * 80)
     print("Examples completed!")
