@@ -1,3 +1,7 @@
+import torch.multiprocessing as mp
+mp.set_start_method("spawn", force=True)
+
+
 from celery import Task
 from src.gpu_server.celery_app import celery_app
 from src.gpu_server.database import SessionLocal, OCRTask, GPTTask
@@ -6,9 +10,12 @@ from src.gpt_oss.gpt_oss_service import get_gpt_service
 import traceback
 from datetime import datetime, timezone
 import logging
+
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
 
 # Load OCR service once at module import time - it will persist for worker lifetime
 logger.info("Initializing OCR service for worker process...")

@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from src.gpu_server.database import init_db
-from src.gpu_server.router import deepseek_ocr_router, gpt_router
+from src.gpu_server.router import gpt_router
+from src.gpu_server.router import deepseek_ocr_router
 import logging
 
 logger = logging.getLogger(__name__)

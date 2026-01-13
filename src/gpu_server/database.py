@@ -4,11 +4,14 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timezone
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/ocr_db")
-DATABASE_POOL_SIZE = int(os.getenv("DATABASE_POOL_SIZE", "5"))
-DATABASE_MAX_OVERFLOW = int(os.getenv("DATABASE_MAX_OVERFLOW", "10"))
-DATABASE_POOL_TIMEOUT = int(os.getenv("DATABASE_POOL_TIMEOUT", "30"))
-DATABASE_POOL_RECYCLE = int(os.getenv("DATABASE_POOL_RECYCLE", "3600"))
+from dotenv import load_dotenv
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_POOL_SIZE = int(os.getenv("DATABASE_POOL_SIZE"))
+DATABASE_MAX_OVERFLOW = int(os.getenv("DATABASE_MAX_OVERFLOW"))
+DATABASE_POOL_TIMEOUT = int(os.getenv("DATABASE_POOL_TIMEOUT"))
+DATABASE_POOL_RECYCLE = int(os.getenv("DATABASE_POOL_RECYCLE"))
 
 engine = create_engine(
     DATABASE_URL,

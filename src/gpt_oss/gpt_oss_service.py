@@ -113,6 +113,10 @@ class GPTOSSService:
 
         try:
             # Load the text-generation pipeline
+            logger.info("Initializing text-generation pipeline...")
+            logger.info("Pipeline arguments:")
+            for k, v in pipeline_kwargs.items():
+                logger.info(f"  {k}: {v}")
             GPTOSSService._pipelines[self.model_name] = pipeline(**pipeline_kwargs)
             GPTOSSService._models_loaded[self.model_name] = True
 
@@ -418,10 +422,10 @@ if __name__ == "__main__":
         service = get_gpt_service('openai/gpt-oss-20b')
 
         result = service.generate_chat_completion(
-            messages=[{"role": "user", "content": "List 3 programming languages:\n1."}],
+            messages=[{"role": "user", "content": "List 5 programming languages:\n1."}],
             temperature=0.7,
-            max_tokens=100,
-            stop=["\n4.", "END"]  # Stop at 4th item or "END"
+            max_tokens=10000,
+            stop=["END"]  # Stop at 4th item or "END"
         )
 
         print(f"Response: {result['text']}")
@@ -555,15 +559,11 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"✗ Error in long conversation test: {str(e)}")
 
+    print(conversation)
     print("\n" + "=" * 80)
     print("Examples completed!")
     print("=" * 80)
-    print("\nTips:")
-    print("- Use lower temperature (0.1-0.3) for factual/focused responses")
-    print("- Use higher temperature (0.7-1.5) for creative/diverse responses")
-    print("- Device auto-detection priority: CUDA -> MPS -> CPU")
-    print("- Multiple models can be loaded simultaneously (if memory allows)")
-    print("- Each model instance is a singleton and persists in memory")
+
 
 
 
