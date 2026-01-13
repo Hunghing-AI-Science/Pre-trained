@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from src.gpu_server.database import init_db
 from src.gpu_server.router import deepseek_ocr_router, gpt_router
@@ -22,6 +23,16 @@ app = FastAPI(
     description="Multi-model API supporting DeepSeek OCR and GPT models following OpenAI architecture",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Add CORS middleware to handle cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify allowed origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Include routers
@@ -92,17 +103,33 @@ if __name__ == "__main__":
     reload = os.getenv("API_RELOAD", "true").lower() == "true"
     log_level = os.getenv("API_LOG_LEVEL", "info").lower()
 
+    # SSL/HTTPS configuration (optional)
+    ssl_keyfile = os.getenv("SSL_KEYFILE", None)
+    ssl_certfile = os.getenv("SSL_CERTFILE", None)
+
     logger.info(f"Starting FastAPI server on {host}:{port}")
     logger.info(f"Workers: {workers}, Reload: {reload}, Log Level: {log_level}")
 
-    uvicorn.run(
-        "src.gpu_server.api:app",
-        host=host,
-        port=port,
-        workers=workers if not reload else 1,
-        reload=reload,
-        log_level=log_level
-    )
+    if ssl_keyfile and ssl_certfile:
+        logger.info(f"HTTPS enabled with cert: {ssl_certfile}")
+    else:
+        logger.info("Running in HTTP mode (no SSL certificates provided)")
+
+    uvicorn_config = {
+        "app": "src.gpu_server.api:app",
+        "host": host,
+        "port": port,
+        "workers": workers if not reload else 1,
+        "reload": reload,
+        "log_level": log_level,
+    }
+
+    # Add SSL configuration if certificates are provided
+    if ssl_keyfile and ssl_certfile:
+        uvicorn_config["ssl_keyfile"] = ssl_keyfile
+        uvicorn_config["ssl_certfile"] = ssl_certfile
+
+    uvicorn.run(**uvicorn_config)
 
 
 
