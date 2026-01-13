@@ -14,7 +14,7 @@ from src.gpu_server.schemas import (
     Usage
 )
 from src.gpu_server.database import get_db, GPTTask
-from src.gpu_server.celery_app import celery_app  # ✅ Only import celery_app, not tasks
+from src.gpu_server.celery_app.celery_app import celery_app  # ✅ Only import celery_app, not tasks
 import uuid
 
 logger = logging.getLogger(__name__)
