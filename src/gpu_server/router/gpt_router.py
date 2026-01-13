@@ -14,7 +14,7 @@ from src.gpu_server.schemas import (
     Usage
 )
 from src.gpu_server.database import get_db, GPTTask
-from src.gpu_server.tasks import process_gpt_task
+from src.gpu_server.celery_app import celery_app  # ✅ Only import celery_app, not tasks
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -104,8 +104,9 @@ async def create_chat_completion(
     db.add(db_task)
     db.commit()
 
-    # Enqueue Celery task
-    process_gpt_task.apply_async(
+    # Enqueue Celery task using send_task (no import of heavy task implementation needed)
+    celery_app.send_task(
+        "tasks.process_gpt",  # Task name registered in Celery
         kwargs={
             'task_id': task_id,
             'messages': messages_dict,

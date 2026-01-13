@@ -5,7 +5,7 @@ from src.gpu_server.schemas import (
     OCRResponse, OCRChoice, Usage,
     OCRTaskStatus, OCRAsyncResponse
 )
-from src.gpu_server.tasks import process_ocr_task
+from src.gpu_server.celery_app import celery_app  # ✅ Only import celery_app, not tasks
 import uuid
 import os
 import logging
@@ -63,8 +63,9 @@ async def create_ocr_completion(
     db.add(db_task)
     db.commit()
 
-    # Enqueue Celery task
-    process_ocr_task.apply_async(
+    # Enqueue Celery task using send_task (no import of heavy task implementation needed)
+    celery_app.send_task(
+        "tasks.process_ocr",  # Task name registered in Celery
         args=[task_id, image_path, prompt],
         task_id=task_id
     )
