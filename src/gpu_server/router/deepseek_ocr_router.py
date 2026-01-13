@@ -5,7 +5,7 @@ from src.gpu_server.schemas import (
     OCRResponse, OCRChoice, Usage,
     OCRTaskStatus, OCRAsyncResponse
 )
-from src.gpu_server.celery_app import celery_app  # ✅ Only import celery_app, not tasks
+from src.gpu_server.celery_app.celery_app import celery_app  # ✅ Only import celery_app, not tasks
 import uuid
 import os
 import logging

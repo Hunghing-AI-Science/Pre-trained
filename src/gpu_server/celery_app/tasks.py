@@ -3,7 +3,7 @@ mp.set_start_method("spawn", force=True)
 
 
 from celery import Task
-from src.gpu_server.celery_app import celery_app
+from src.gpu_server.celery_app.celery_app import celery_app
 from src.gpu_server.database import SessionLocal, OCRTask, GPTTask
 from src.ocr.deepseek_ocr_service import get_ocr_service
 from src.gpt_oss.gpt_oss_service import get_gpt_service
@@ -11,7 +11,7 @@ import traceback
 from datetime import datetime, timezone
 import logging
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
