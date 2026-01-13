@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional
 from datetime import datetime
 
 
@@ -97,5 +97,25 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: list[ChatCompletionChoice]
     usage: Usage
+
+
+class ChatCompletionAsyncResponse(BaseModel):
+    """Async task creation response for chat completion"""
+    id: str
+    object: str = "chat.completion.task"
+    status: str
+    model: str
+    created_at: datetime
+
+
+class ChatCompletionTaskStatus(BaseModel):
+    """Task status response for chat completion"""
+    id: str
+    status: str  # pending, processing, completed, failed
+    model: str
+    created_at: datetime
+    updated_at: datetime
+    result: Optional[ChatCompletionResponse] = None
+    error: Optional[str] = None
 
 

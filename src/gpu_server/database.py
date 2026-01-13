@@ -35,6 +35,21 @@ class OCRTask(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
+class GPTTask(Base):
+    __tablename__ = "gpt_tasks"
+
+    id = Column(String, primary_key=True, index=True)
+    status = Column(String, default="pending")  # pending, processing, completed, failed
+    messages = Column(JSON)  # List of chat messages
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+    model_name = Column(String, default="openai/gpt-oss-20b")
+    temperature = Column(JSON, nullable=True)  # Store as float in JSON
+    max_tokens = Column(JSON, nullable=True)  # Store as int in JSON
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
 def get_db():
     db = SessionLocal()
     try:

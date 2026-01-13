@@ -16,10 +16,10 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv("CELERY_WORKER_PREFETCH_MULTIP
 CELERY_WORKER_MAX_TASKS_PER_CHILD = int(os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "1000"))
 
 celery_app = Celery(
-    "ocr_tasks",
+    "gpu_tasks",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["src.tasks"]
+    include=["src.gpu_server.tasks"]
 )
 
 celery_app.conf.update(

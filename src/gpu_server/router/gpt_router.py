@@ -1,7 +1,11 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Depends
+from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 import os
+import httpx
+import asyncio
+import time
 from src.gpu_server.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -9,9 +13,9 @@ from src.gpu_server.schemas import (
     ChatMessage,
     Usage
 )
-from src.gpt_oss.gpt_oss_service import get_gpt_service
+from src.gpu_server.database import get_db, GPTTask
+from src.gpu_server.tasks import process_gpt_task
 import uuid
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +28,8 @@ router = APIRouter(
 @router.post("/completions", response_model=ChatCompletionResponse)
 async def create_chat_completion(
     request: ChatCompletionRequest,
-    authorization: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
 ):
     """
     Create a chat completion using GPT model.
@@ -36,6 +41,9 @@ async def create_chat_completion(
     - top_p: Nucleus sampling parameter
     - max_tokens: Maximum tokens to generate
     - stream: Whether to stream the response
+
+    The request is processed asynchronously via Celery, then polled internally
+    using httpx.AsyncClient until complete. Returns the final result directly.
 
     Authorization: Bearer token required in headers
     """
@@ -63,91 +71,131 @@ async def create_chat_completion(
             detail="Messages list cannot be empty"
         )
 
-    # Generate unique ID for this completion
-    completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
-    current_timestamp = int(time.time())
+    # Generate unique task ID
+    task_id = f"chatcmpl-{uuid.uuid4().hex}"
 
-    logger.info(f"Processing chat completion request {completion_id} with model {request.model}")
+    logger.info(f"Creating chat completion task {task_id} with model {request.model}")
 
-    try:
-        # Get GPT service instance for the requested model
-        # Map OpenAI model names to actual model identifiers
-        model_map = {
-            'gpt-3.5-turbo': os.getenv('GPT_35_MODEL', 'openai/gpt-oss-20b'),
-            'gpt-4': os.getenv('GPT_4_MODEL', 'openai/gpt-oss-120b'),
-            'openai/gpt-oss-20b': 'openai/gpt-oss-20b',
-            'openai/gpt-oss-120b': 'openai/gpt-oss-120b',
-        }
+    # Map OpenAI model names to actual model identifiers
+    model_map = {
+        'gpt-3.5-turbo': os.getenv('GPT_35_MODEL', 'openai/gpt-oss-20b'),
+        'gpt-4': os.getenv('GPT_4_MODEL', 'openai/gpt-oss-120b'),
+        'openai/gpt-oss-20b': 'openai/gpt-oss-20b',
+        'openai/gpt-oss-120b': 'openai/gpt-oss-120b',
+    }
 
-        actual_model = model_map.get(request.model, request.model)
-        gpt_service = get_gpt_service(actual_model)
+    actual_model = model_map.get(request.model, request.model)
 
-        # Convert Pydantic messages to dict format
-        messages_dict = [
-            {"role": msg.role, "content": msg.content}
-            for msg in request.messages
-        ]
+    # Convert Pydantic messages to dict format for storage
+    messages_dict = [
+        {"role": msg.role, "content": msg.content}
+        for msg in request.messages
+    ]
 
-        # Generate completion using GPT service
-        result = gpt_service.generate_chat_completion(
-            messages=messages_dict,
-            temperature=request.temperature,
-            top_p=request.top_p,
-            max_tokens=request.max_tokens,
-            stop=request.stop,
-            presence_penalty=request.presence_penalty,
-            frequency_penalty=request.frequency_penalty,
-            n=request.n or 1
-        )
+    # Create task in database
+    db_task = GPTTask(
+        id=task_id,
+        status="pending",
+        messages=messages_dict,
+        model_name=actual_model,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens
+    )
+    db.add(db_task)
+    db.commit()
 
-        # Handle multiple completions if n > 1
-        if request.n and request.n > 1:
-            choices = [
-                ChatCompletionChoice(
-                    index=i,
-                    message=ChatMessage(
-                        role="assistant",
-                        content=text
-                    ),
-                    finish_reason="stop"
+    # Enqueue Celery task
+    process_gpt_task.apply_async(
+        kwargs={
+            'task_id': task_id,
+            'messages': messages_dict,
+            'model_name': actual_model,
+            'temperature': request.temperature,
+            'top_p': request.top_p,
+            'max_tokens': request.max_tokens,
+            'stop': request.stop,
+            'presence_penalty': request.presence_penalty,
+            'frequency_penalty': request.frequency_penalty,
+            'n': request.n or 1
+        },
+        task_id=task_id
+    )
+
+    logger.info(f"Chat completion task {task_id} enqueued, polling for result...")
+
+    # Poll the task status internally using httpx until completion
+    poll_interval = 1.0  # seconds
+    max_wait_time = 300  # 5 minutes timeout
+    start_time = time.time()
+
+    async with httpx.AsyncClient() as client:
+        while True:
+            elapsed = time.time() - start_time
+            if elapsed > max_wait_time:
+                logger.error(f"Task {task_id} timed out after {max_wait_time}s")
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Request timed out after {max_wait_time} seconds"
                 )
-                for i, text in enumerate(result["text"])
-            ]
-        else:
-            choices = [
-                ChatCompletionChoice(
-                    index=0,
-                    message=ChatMessage(
-                        role="assistant",
-                        content=result["text"]
-                    ),
-                    finish_reason="stop"
+
+            # Query database for task status
+            db.refresh(db_task)
+            task_status = db_task.status
+
+            if task_status == "completed":
+                logger.info(f"Task {task_id} completed in {elapsed:.1f}s")
+
+                # Extract result
+                result_text = db_task.result.get("text", "")
+
+                # Handle multiple completions if it's a list
+                if isinstance(result_text, list):
+                    choices = [
+                        ChatCompletionChoice(
+                            index=i,
+                            message=ChatMessage(
+                                role="assistant",
+                                content=text
+                            ),
+                            finish_reason="stop"
+                        )
+                        for i, text in enumerate(result_text)
+                    ]
+                else:
+                    choices = [
+                        ChatCompletionChoice(
+                            index=0,
+                            message=ChatMessage(
+                                role="assistant",
+                                content=result_text
+                            ),
+                            finish_reason="stop"
+                        )
+                    ]
+
+                # Return completed response
+                return ChatCompletionResponse(
+                    id=task_id,
+                    object="chat.completion",
+                    created=int(db_task.created_at.timestamp()),
+                    model=request.model,
+                    choices=choices,
+                    usage=Usage(
+                        prompt_tokens=db_task.result.get("usage", {}).get("prompt_tokens", 0),
+                        completion_tokens=db_task.result.get("usage", {}).get("completion_tokens", 0),
+                        total_tokens=db_task.result.get("usage", {}).get("total_tokens", 0)
+                    )
                 )
-            ]
 
-        # Create response
-        response = ChatCompletionResponse(
-            id=completion_id,
-            object="chat.completion",
-            created=current_timestamp,
-            model=request.model,
-            choices=choices,
-            usage=Usage(
-                prompt_tokens=result["prompt_tokens"],
-                completion_tokens=result["completion_tokens"],
-                total_tokens=result["total_tokens"]
-            )
-        )
+            elif task_status == "failed":
+                error_msg = db_task.error or "Unknown error"
+                logger.error(f"Task {task_id} failed: {error_msg}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Task failed: {error_msg}"
+                )
 
-        logger.info(f"Chat completion {completion_id} completed successfully")
-        return response
-
-    except Exception as e:
-        logger.error(f"Error processing chat completion {completion_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate completion: {str(e)}"
-        )
-
+            # Wait before next poll (non-blocking async sleep)
+            await asyncio.sleep(poll_interval)
 
 
