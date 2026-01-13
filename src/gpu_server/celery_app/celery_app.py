@@ -1,5 +1,11 @@
+import torch.multiprocessing as mp
+mp.set_start_method("spawn", force=True)
+
 from celery import Celery
 import os
+
+from kombu import Queue
+
 
 # Load Celery configuration from environment variables
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@localhost:5672//")
@@ -15,13 +21,29 @@ CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3000
 CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1"))
 CELERY_WORKER_MAX_TASKS_PER_CHILD = int(os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "1000"))
 
-celery_app = Celery(
-    "gpu_tasks",
-    broker=CELERY_BROKER_URL,
-    backend=CELERY_RESULT_BACKEND,
-    include=["src.gpu_server.tasks"]
+task_queues = (
+    Queue("ocr"),
+    Queue("llm"),
 )
 
+task_routes = {
+    "tasks.ocr_task": {"queue": "ocr"},
+    "tasks.gpt_task": {"queue": "gpt"},
+}
+
+celery_app = Celery(
+    "gpu_server",
+    broker=CELERY_BROKER_URL,
+    backend=CELERY_RESULT_BACKEND,
+    include=["src.gpu_server.celery_app.gpt_tasks",
+             "src.gpu_server.celery_app.ocr_tasks"],
+)
+
+celery_app.config_from_object("celery")
+
+celery_app.autodiscover_tasks([
+    "src.gpu_server.celery_app"
+])
 celery_app.conf.update(
     task_serializer=CELERY_TASK_SERIALIZER,
     accept_content=CELERY_ACCEPT_CONTENT,
