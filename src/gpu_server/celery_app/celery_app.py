@@ -27,8 +27,9 @@ task_queues = (
 )
 
 task_routes = {
-    "tasks.ocr_task": {"queue": "ocr"},
-    "tasks.gpt_task": {"queue": "gpt"},
+    "src.gpu_server.celery_app.gpt_tasks": {"queue": "ocr"},
+    "src.gpu_server.celery_app.gpt_tasks.process_chat_completion": {"queue": "gpt"},
+    "src.gpu_server.celery_app.ocr_tasks": {"queue": "gpt"},
 }
 
 celery_app = Celery(

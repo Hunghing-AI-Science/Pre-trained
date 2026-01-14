@@ -14,7 +14,14 @@ logger = logging.getLogger(__name__)
 
 # Load GPT service once at module import time - it will persist for worker lifetime
 logger.info("Initializing GPT service for worker process...")
-gpt_service = get_gpt_service()  # Default model
+def get_shared_gpt_service():
+    global gpt_service
+    if gpt_service is None:
+        logger.info("Initializing GPT service for worker process...")
+        gpt_service = get_gpt_service()
+        logger.info("GPT service initialized and ready")
+    return gpt_service
+
 logger.info("GPT service initialized and ready")
 
 
@@ -33,7 +40,7 @@ class DatabaseTask(Task):
     @property
     def gpt_service(self):
         """Get GPT service (shared across all tasks in this worker)"""
-        return gpt_service
+        return get_shared_gpt_service()
 
     def after_return(self, *args, **kwargs):
         """Clean up database connection after task completes"""
@@ -43,7 +50,7 @@ class DatabaseTask(Task):
 
 
 
-@celery_app.task(base=DatabaseTask, bind=True, name="tasks.process_gpt")
+@celery_app.task(base=DatabaseTask, bind=True, name="src.gpu_server.celery_app.gpt_tasks.process_chat_completion")
 def process_gpt_task(
     self,
     task_id: str,

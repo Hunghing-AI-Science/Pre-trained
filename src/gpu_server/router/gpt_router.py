@@ -47,12 +47,13 @@ async def create_chat_completion(
 
     Authorization: Bearer token required in headers
     """
+    logger.info("Creating chat completion")
     # Validate API key
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid API key. Expected format: 'Bearer YOUR_API_KEY'"
-        )
+    # if not authorization or not authorization.startswith("Bearer "):
+    #     raise HTTPException(
+    #         status_code=401,
+    #         detail="Missing or invalid API key. Expected format: 'Bearer YOUR_API_KEY'"
+    #     )
 
     ### NO API KEY VALIDATION TEMPORARILY
     # Extract API key
@@ -73,13 +74,10 @@ async def create_chat_completion(
 
     # Generate unique task ID
     task_id = f"chatcmpl-{uuid.uuid4().hex}"
-
     logger.info(f"Creating chat completion task {task_id} with model {request.model}")
 
     # Map OpenAI model names to actual model identifiers
     model_map = {
-        'gpt-3.5-turbo': os.getenv('GPT_35_MODEL', 'openai/gpt-oss-20b'),
-        'gpt-4': os.getenv('GPT_4_MODEL', 'openai/gpt-oss-120b'),
         'openai/gpt-oss-20b': 'openai/gpt-oss-20b',
         'openai/gpt-oss-120b': 'openai/gpt-oss-120b',
     }
@@ -103,10 +101,12 @@ async def create_chat_completion(
     )
     db.add(db_task)
     db.commit()
+    TASK_NAME = "src.gpu_server.celery_app.gpt_tasks.process_chat_completion"
 
+    logger.info("Task created in database with ID: %s", task_id)
     # Enqueue Celery task using send_task (no import of heavy task implementation needed)
     celery_app.send_task(
-        "tasks.process_gpt",  # Task name registered in Celery
+        TASK_NAME,  # Task name registered in Celery
         kwargs={
             'task_id': task_id,
             'messages': messages_dict,
