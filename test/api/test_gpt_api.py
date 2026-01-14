@@ -36,6 +36,23 @@ class GPTAPIClient:
             "Content-Type": "application/json"
         }
 
+    def _print_curl_command(self, url: str, payload: Dict[str, Any]):
+        """Print equivalent curl command"""
+        payload_json = json.dumps(payload, indent=2)
+
+        # Escape single quotes in JSON for shell
+        payload_json_escaped = payload_json.replace("'", "'\\''")
+
+        curl_command = f"""curl -X POST '{url}' \\
+  -H 'Authorization: Bearer {self.api_key}' \\
+  -H 'Content-Type: application/json' \\
+  -d '{payload_json_escaped}'"""
+
+        print(f"\n🔧 Equivalent curl command:")
+        print("=" * 80)
+        print(curl_command)
+        print("=" * 80)
+
     def chat_completion(
         self,
         messages: List[Dict[str, str]],
@@ -43,6 +60,7 @@ class GPTAPIClient:
         temperature: float = 0.7,
         max_tokens: int = 150,
         n: int = 1,
+        print_curl: bool = True,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -54,6 +72,7 @@ class GPTAPIClient:
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             n: Number of completions
+            print_curl: Whether to print curl command
             **kwargs: Additional parameters
 
         Returns:
@@ -76,11 +95,15 @@ class GPTAPIClient:
         print(f"   Temperature: {temperature}")
         print(f"   Max tokens: {max_tokens}")
 
+        # Print curl command
+        if print_curl:
+            self._print_curl_command(url, payload)
+
         response = requests.post(url, headers=self.headers, json=payload)
         response.raise_for_status()
 
         result = response.json()
-        print(f"✅ Response received")
+        print(f"\n✅ Response received")
         print(f"   Tokens: {result['usage']['total_tokens']}")
 
         return result
