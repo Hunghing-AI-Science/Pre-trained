@@ -1,6 +1,3 @@
-import torch.multiprocessing as mp
-mp.set_start_method("spawn", force=True)
-
 
 from celery import Task
 from src.gpu_server.celery_app.celery_app import celery_app
@@ -14,13 +11,6 @@ import logging
 from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
-
-
-
-# Load OCR service once at module import time - it will persist for worker lifetime
-logger.info("Initializing OCR service for worker process...")
-ocr_service = get_ocr_service()
-logger.info("OCR service initialized and ready")
 
 # Load GPT service once at module import time - it will persist for worker lifetime
 logger.info("Initializing GPT service for worker process...")
@@ -39,10 +29,6 @@ class DatabaseTask(Task):
             self._db = SessionLocal()
         return self._db
 
-    @property
-    def ocr_service(self):
-        """Get OCR service (shared across all tasks in this worker)"""
-        return ocr_service
 
     @property
     def gpt_service(self):
@@ -55,60 +41,6 @@ class DatabaseTask(Task):
             self._db.close()
             self._db = None
 
-
-@celery_app.task(base=DatabaseTask, bind=True, name="tasks.process_ocr")
-def process_ocr_task(self, task_id: str, image_path: str, prompt: str):
-    """
-    Process OCR task using DeepSeek OCR model
-    """
-    db = self.db
-
-    try:
-        # Update task status to processing
-        task = db.query(OCRTask).filter(OCRTask.id == task_id).first()
-        if not task:
-            raise ValueError(f"Task {task_id} not found")
-
-        task.status = "processing"
-        db.commit()
-
-        # Perform OCR
-        ocr_result = self.ocr_service.perform_ocr(image_path, prompt)
-
-        # Update task with results
-        task.status = "completed"
-        task.result = {
-            "text": ocr_result.get("text", ""),
-            "metadata": ocr_result.get("metadata", {}),
-            "usage": {
-                "prompt_tokens": ocr_result.get("prompt_tokens", 0),
-                "completion_tokens": ocr_result.get("completion_tokens", 0),
-                "total_tokens": ocr_result.get("total_tokens", 0)
-            }
-        }
-        task.updated_at = datetime.now(timezone.utc)
-        db.commit()
-
-        return {
-            "task_id": task_id,
-            "status": "completed",
-            "result": task.result
-        }
-
-    except Exception as e:
-        # Update task with error
-        task = db.query(OCRTask).filter(OCRTask.id == task_id).first()
-        if task:
-            task.status = "failed"
-            task.error = str(e)
-            task.updated_at = datetime.now(timezone.utc)
-            db.commit()
-
-        # Log the error
-        logger.error(f"Error processing OCR task {task_id}: {str(e)}")
-        logger.error(traceback.format_exc())
-
-        raise
 
 
 @celery_app.task(base=DatabaseTask, bind=True, name="tasks.process_gpt")
