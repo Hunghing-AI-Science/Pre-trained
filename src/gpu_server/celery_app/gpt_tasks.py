@@ -12,9 +12,11 @@ from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# Load GPT service once at module import time - it will persist for worker lifetime
-logger.info("Initializing GPT service for worker process...")
+# Initialize global GPT service variable
+gpt_service = None
+
 def get_shared_gpt_service():
+    """Get or initialize the shared GPT service for this worker process"""
     global gpt_service
     if gpt_service is None:
         logger.info("Initializing GPT service for worker process...")
@@ -22,7 +24,6 @@ def get_shared_gpt_service():
         logger.info("GPT service initialized and ready")
     return gpt_service
 
-logger.info("GPT service initialized and ready")
 
 
 class DatabaseTask(Task):

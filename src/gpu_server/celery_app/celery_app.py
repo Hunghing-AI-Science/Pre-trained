@@ -23,13 +23,12 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = int(os.getenv("CELERY_WORKER_MAX_TASKS_PER_C
 
 task_queues = (
     Queue("ocr"),
-    Queue("llm"),
+    Queue("gpt"),
 )
 
 task_routes = {
-    "src.gpu_server.celery_app.gpt_tasks": {"queue": "ocr"},
     "src.gpu_server.celery_app.gpt_tasks.process_chat_completion": {"queue": "gpt"},
-    "src.gpu_server.celery_app.ocr_tasks": {"queue": "gpt"},
+    "src.gpu_server.celery_app.ocr_tasks.*": {"queue": "ocr"},
 }
 
 celery_app = Celery(
