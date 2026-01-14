@@ -1,8 +1,5 @@
-
 from celery import Task
-from src.gpu_server.celery_app.celery_app import celery_app
-from src.gpu_server.database import SessionLocal, OCRTask, GPTTask
-from src.ocr.deepseek_ocr_service import get_ocr_service
+from src.gpu_server.database import SessionLocal, GPTTask
 from src.gpt_oss.gpt_oss_service import get_gpt_service
 import traceback
 from datetime import datetime, timezone
@@ -23,7 +20,6 @@ def get_shared_gpt_service():
         gpt_service = get_gpt_service()
         logger.info("GPT service initialized and ready")
     return gpt_service
-
 
 
 class DatabaseTask(Task):
@@ -50,6 +46,8 @@ class DatabaseTask(Task):
             self._db = None
 
 
+# Import celery_app at the end to avoid circular import
+from src.gpu_server.celery_app.celery_app import celery_app
 
 @celery_app.task(base=DatabaseTask, bind=True, name="src.gpu_server.celery_app.gpt_tasks.process_chat_completion")
 def process_gpt_task(

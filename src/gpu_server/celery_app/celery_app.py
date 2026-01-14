@@ -39,11 +39,11 @@ celery_app = Celery(
              "src.gpu_server.celery_app.ocr_tasks"],
 )
 
-celery_app.config_from_object("celery")
-
+# Discover tasks in the celery_app package
 celery_app.autodiscover_tasks([
     "src.gpu_server.celery_app"
 ])
+
 celery_app.conf.update(
     task_serializer=CELERY_TASK_SERIALIZER,
     accept_content=CELERY_ACCEPT_CONTENT,
@@ -55,5 +55,7 @@ celery_app.conf.update(
     task_soft_time_limit=CELERY_TASK_SOFT_TIME_LIMIT,
     worker_prefetch_multiplier=CELERY_WORKER_PREFETCH_MULTIPLIER,
     worker_max_tasks_per_child=CELERY_WORKER_MAX_TASKS_PER_CHILD,
+    task_queues=task_queues,
+    task_routes=task_routes,
 )
 
