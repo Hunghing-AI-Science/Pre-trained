@@ -11,6 +11,8 @@ import os
 import logging
 from typing import Optional
 import shutil
+import httpx
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/completions", response_model=OCRAsyncResponse)
 async def create_ocr_completion(
-    file: UploadFile = File(..., description="Image file to process"),
+    file: Optional[UploadFile] = File(None, description="Image file to process"),
+    image_url: Optional[str] = Form(None, description="URL of image to process"),
     prompt: str = Form(default="Free OCR.", description="OCR prompt"),
     model: str = Form(default="deepseek-ocr", description="Model identifier"),
     base_size: Optional[int] = Form(default=1024),
@@ -37,21 +40,72 @@ async def create_ocr_completion(
     """
     Create an OCR completion task (async)
 
-    This endpoint accepts an image and returns a task ID immediately.
-    The actual OCR processing is done asynchronously via Celery.
+    This endpoint accepts either:
+    - An uploaded image file (file parameter)
+    - A URL to an image on the internet (image_url parameter)
+
+    Returns a task ID immediately. The actual OCR processing is done asynchronously via Celery.
     """
+    # Validate that either file or image_url is provided
+    if not file and not image_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Either 'file' or 'image_url' must be provided"
+        )
+
+    if file and image_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either 'file' or 'image_url', not both"
+        )
+
     # Generate task ID
     task_id = f"ocr_{uuid.uuid4().hex}"
 
-    # Save uploaded file
-    file_extension = os.path.splitext(file.filename)[1]
-    image_path = os.path.join(UPLOAD_DIR, f"{task_id}{file_extension}")
-
     try:
-        with open(image_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        if file:
+            # Handle uploaded file
+            file_extension = os.path.splitext(file.filename)[1]
+            image_path = os.path.join(UPLOAD_DIR, f"{task_id}{file_extension}")
+
+            with open(image_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            logger.info(f"Saved uploaded file to {image_path}")
+
+        else:
+            # Handle image URL - download from internet
+            logger.info(f"Downloading image from URL: {image_url}")
+
+            # Parse URL to get file extension
+            parsed_url = urlparse(image_url)
+            url_path = parsed_url.path
+            file_extension = os.path.splitext(url_path)[1] if url_path else ".jpg"
+
+            # If no extension, default to .jpg
+            if not file_extension or file_extension not in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
+                file_extension = '.jpg'
+
+            image_path = os.path.join(UPLOAD_DIR, f"{task_id}{file_extension}")
+
+            # Download image from URL
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(image_url)
+                response.raise_for_status()
+
+                # Save downloaded image
+                with open(image_path, "wb") as f:
+                    f.write(response.content)
+
+            logger.info(f"Downloaded image from URL and saved to {image_path}")
+
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to download image from URL: {str(e)}"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save image: {str(e)}")
 
     # Create task in database
     db_task = OCRTask(
