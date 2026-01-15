@@ -44,7 +44,7 @@ class DatabaseTask(Task):
             self._db = None
 
 
-@celery_app.task(base=DatabaseTask, bind=True, name="tasks.process_ocr")
+@celery_app.task(base=DatabaseTask, bind=True, name="tasks.process_ocr", time_limit=180, soft_time_limit=170)
 def process_ocr_task(self, task_id: str, image_path: str, prompt: str):
     """
     Process OCR task using DeepSeek OCR model
