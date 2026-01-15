@@ -8,8 +8,8 @@ Usage:
 """
 
 import requests
-import json
 import time
+import base64
 
 
 class OCRAPIClient:
@@ -18,9 +18,49 @@ class OCRAPIClient:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
 
+    def download_and_encode_image(self, image_url: str) -> str:
+        """
+        Download image from URL and encode to base64 data URI
+
+        Args:
+            image_url: URL of the image to download
+
+        Returns:
+            Base64 data URI string
+        """
+        print(f"\n📥 Downloading image from URL: {image_url}")
+
+        response = requests.get(image_url, timeout=30)
+        response.raise_for_status()
+
+        image_bytes = response.content
+        print(f"   Downloaded: {len(image_bytes)} bytes")
+
+        # Encode to base64
+        base64_encoded = base64.b64encode(image_bytes).decode('utf-8')
+
+        # Detect image format from Content-Type header
+        content_type = response.headers.get('Content-Type', 'image/jpeg')
+        if 'png' in content_type:
+            image_format = 'png'
+        elif 'gif' in content_type:
+            image_format = 'gif'
+        elif 'webp' in content_type:
+            image_format = 'webp'
+        else:
+            image_format = 'jpeg'
+
+        data_uri = f"data:image/{image_format};base64,{base64_encoded}"
+        print(f"   Encoded to base64: {len(data_uri)} chars")
+
+        return data_uri
+
     def ocr_from_url(self, image_url: str, prompt: str = "Free OCR."):
         """
         Create OCR task from image URL
+
+        This method downloads the image and converts it to base64,
+        then sends it to the API.
 
         Args:
             image_url: URL of the image to process
@@ -29,19 +69,29 @@ class OCRAPIClient:
         Returns:
             Task ID
         """
-        url = f"{self.base_url}/v1/ocr/completions"
+        # Step 1: Download and encode image
+        image_data_uri = self.download_and_encode_image(image_url)
 
-        # Use form data to send image_url and prompt
-        data = {
-            "image_url": image_url,
-            "prompt": prompt
+        # Step 2: Send to API
+        url = f"{self.base_url}/v1/ocr/chat/completions"
+
+        payload = {
+            "model": "deepseek-ocr",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image", "image": image_data_uri}
+                    ]
+                }
+            ]
         }
 
-        print(f"\n📤 Creating OCR task from URL")
-        print(f"   Image URL: {image_url}")
+        print(f"\n📤 Creating OCR task")
         print(f"   Prompt: {prompt}")
 
-        response = requests.post(url, data=data)
+        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
         response.raise_for_status()
 
         result = response.json()
@@ -97,13 +147,30 @@ class OCRAPIClient:
 
     def _print_curl_command(self, image_url: str, prompt: str):
         """Print equivalent curl command"""
-        curl_command = f"""curl -X POST '{self.base_url}/v1/ocr/completions' \\
-  -F 'image_url={image_url}' \\
-  -F 'prompt={prompt}'"""
-
-        print(f"\n🔧 Equivalent curl command:")
+        print(f"\n🔧 Equivalent curl commands:")
         print("=" * 80)
-        print(curl_command)
+        print("# Step 1: Download and encode image to base64")
+        print(f"curl -s '{image_url}' | base64 > /tmp/image.b64")
+        print("\n# Step 2: Send to OCR API")
+        print(f"""curl -X POST '{self.base_url}/v1/ocr/chat/completions' \\
+  -H 'Content-Type: application/json' \\
+  -d '{{
+    "model": "deepseek-ocr",
+    "messages": [
+      {{
+        "role": "user",
+        "content": [
+          {{"type": "text", "text": "{prompt}"}},
+          {{"type": "image", "image": "data:image/jpeg;base64,'$(cat /tmp/image.b64)'"}}
+        ]
+      }}
+    ]
+  }}'""")
+        print("\n# Or in one line (simpler):")
+        print(f"""IMAGE_BASE64=$(curl -s '{image_url}' | base64 | tr -d '\\n')
+curl -X POST '{self.base_url}/v1/ocr/chat/completions' \\
+  -H 'Content-Type: application/json' \\
+  -d '{{"model":"deepseek-ocr","messages":[{{"role":"user","content":[{{"type":"text","text":"{prompt}"}},{{"type":"image","image":"data:image/jpeg;base64,'"$IMAGE_BASE64"'"}}]}}]}}'""")
         print("=" * 80)
 
 
