@@ -11,13 +11,13 @@ def request_to_curl(prep):
 
 load_dotenv()
 # Initialize the client (ensure your API key is set in the environment)
-client = OpenAI(base_url="http://localhost:8000/v1",)
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="")
 
 
 
 # Create a chat completion
 response = client.chat.completions.create(
-    model="openai/gpt-oss-20b",
+    model="openai/gpt-oss-120b",
     messages=[
         {"role": "system", "content": "You are a helpful and friendly assistant."},
         {"role": "user", "content": "Write a python scipt that can find the prime number."}
