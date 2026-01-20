@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
@@ -27,7 +29,7 @@ router = APIRouter(
 
 @router.post("/completions", response_model=ChatCompletionResponse)
 async def create_chat_completion(
-    request: ChatCompletionRequest,
+    request: Request,
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
@@ -47,6 +49,20 @@ async def create_chat_completion(
 
     Authorization: Bearer token required in headers
     """
+    raw_body = await request.body()
+    print("\n📩 Raw incoming body:", raw_body.decode())
+
+    try:
+        data = await request.json()
+    except Exception as e:
+        return JSONResponse({"error": f"Invalid JSON: {e}"}, status_code=400)
+
+    # ✅ Proceed to validate with your model
+    try:
+        request = ChatCompletionRequest(**data)
+    except ValidationError as e:
+        print("\n❌ Validation error details:", e.errors())
+        return JSONResponse({"error": e.errors()}, status_code=422)
     logger.info("Creating chat completion")
     # Validate API key
     # if not authorization or not authorization.startswith("Bearer "):
@@ -126,7 +142,7 @@ async def create_chat_completion(
 
     # Poll the task status internally using httpx until completion
     poll_interval = 1.0  # seconds
-    max_wait_time = 300  # 5 minutes timeout
+    max_wait_time = 600  # 10 minutes timeout
     start_time = time.time()
 
     async with httpx.AsyncClient() as client:

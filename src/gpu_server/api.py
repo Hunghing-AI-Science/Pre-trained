@@ -80,20 +80,6 @@ async def list_models():
                 "created": 1704067200,
                 "owned_by": "deepseek-ai",
                 "type": "ocr"
-            },
-            {
-                "id": "gpt-3.5-turbo",
-                "object": "model",
-                "created": 1677610602,
-                "owned_by": "openai",
-                "type": "chat"
-            },
-            {
-                "id": "gpt-4",
-                "object": "model",
-                "created": 1687882410,
-                "owned_by": "openai",
-                "type": "chat"
             }
         ]
     }

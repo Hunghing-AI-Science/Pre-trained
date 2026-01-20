@@ -162,7 +162,7 @@ async def create_ocr_chat_completion(
 
     # Enqueue Celery task
     celery_app.send_task(
-        "tasks.process_ocr",
+        "src.gpu_server.celery_app.ocr_tasks.process_chat_completion",  # Task name registered in Celery
         args=[task_id, image_path, prompt],
         task_id=task_id
     )
