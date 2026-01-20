@@ -1,9 +1,14 @@
-import torch.multiprocessing as mp
-mp.set_start_method("spawn", force=True)
+import os
+# CRITICAL: Set multiprocessing start method FIRST, before any other imports
+# This must be done before importing torch, celery, or any CUDA-related code
+import multiprocessing
+try:
+    multiprocessing.set_start_method("spawn", force=True)
+except RuntimeError:
+    # Already set, that's fine
+    pass
 
 from celery import Celery
-import os
-
 from kombu import Queue
 
 
@@ -57,5 +62,8 @@ celery_app.conf.update(
     worker_max_tasks_per_child=CELERY_WORKER_MAX_TASKS_PER_CHILD,
     task_queues=task_queues,
     task_routes=task_routes,
+    # CRITICAL: Use solo pool to avoid CUDA fork issues
+    # Solo pool runs tasks in the main worker process (no forking)
+    worker_pool='solo',
 )
 

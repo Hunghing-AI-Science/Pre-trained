@@ -61,6 +61,31 @@ class OCRAsyncResponse(BaseModel):
     created_at: datetime
 
 
+class ContentPart(BaseModel):
+    """Content part for multimodal messages (text or image)"""
+    type: str = Field(description="Type of content: 'text' or 'image'")
+    text: Optional[str] = Field(default=None, description="Text content (when type=text)")
+    image: Optional[str] = Field(default=None, description="Base64 image data (when type=image): data:image/jpeg;base64,...")
+
+
+class OCRMessage(BaseModel):
+    """Message with text and/or image content"""
+    role: str = Field(default="user", description="Role: system, user, or assistant")
+    content: str | list[ContentPart] = Field(description="Content: string or array of content parts")
+
+
+class OCRCompletionRequest(BaseModel):
+    """OCR completion request following OpenAI Vision API format"""
+    model: str = Field(default="deepseek-ocr", description="Model identifier")
+    messages: list[OCRMessage] = Field(description="Messages with text and/or images")
+    max_tokens: Optional[int] = Field(default=1000, description="Maximum tokens to generate")
+    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
+    # OCR-specific parameters
+    base_size: Optional[int] = Field(default=1024, description="Base size for processing")
+    image_size: Optional[int] = Field(default=640, description="Image size for processing")
+    crop_mode: Optional[bool] = Field(default=True, description="Enable crop mode")
+
+
 # GPT Chat Completion Schemas
 class ChatMessage(BaseModel):
     """Chat message schema"""
