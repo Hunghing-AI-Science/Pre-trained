@@ -1,4 +1,4 @@
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer
 import torch
 import os
 import logging
@@ -24,14 +24,14 @@ class DeepSeekOCRService:
 
     def __init__(self):
         """Initialize configuration from environment variables"""
-        self.model_name = os.getenv('OCR_MODEL_NAME', 'deepseek-ai/DeepSeek-OCR')
+        self.model_name = os.getenv('OCR_MODEL_NAME') # prithivMLmods/DeepSeek-OCR-Latest-BF16.I64
         self.cache_dir = os.getenv('OCR_MODEL_CACHE_DIR', None)
         self.attention_implementation = os.getenv('OCR_ATTENTION_IMPLEMENTATION', 'flash_attention_2')
         self.use_safetensors = os.getenv('OCR_USE_SAFETENSORS', 'true').lower() == 'true'
         self.torch_dtype = os.getenv('OCR_TORCH_DTYPE', 'bfloat16')
         self.device = os.getenv('OCR_DEVICE', 'cuda')
 
-        self.tokenizer = AutoModel.from_pretrained(
+        self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             trust_remote_code=True
         )
@@ -133,16 +133,17 @@ class DeepSeekOCRService:
             base_size=base_size,
             image_size=image_size,
             crop_mode=crop_mode,
-            save_results=save_results,
-            test_compress=test_compress
+            save_results=True,
+            eval_mode=True,
+            # test_compress=test_compress
         )
 
         # Parse and format the result
         ocr_text = result if isinstance(result, str) else str(result)
 
         # Estimate token usage (rough estimation)
-        prompt_tokens = len(formatted_prompt.split()) + 100  # Adding image token estimate
-        completion_tokens = len(ocr_text.split())
+        # prompt_tokens = len(formatted_prompt.split()) + 100  # Adding image token estimate
+        # completion_tokens = len(ocr_text.split())
 
         return {
             "text": ocr_text,
@@ -153,9 +154,9 @@ class DeepSeekOCRService:
                 "image_size": image_size,
                 "crop_mode": crop_mode
             },
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": prompt_tokens + completion_tokens
+            # "prompt_tokens": prompt_tokens,
+            # "completion_tokens": completion_tokens,
+            # "total_tokens": prompt_tokens + completion_tokens
         }
 
 
@@ -168,10 +169,41 @@ def get_ocr_service() -> DeepSeekOCRService:
     Get or create the global OCR service instance
     This ensures the model is loaded once and persists throughout the process lifetime
     """
-    return None
+    # return None
     global _ocr_service_instance
     if _ocr_service_instance is None:
         _ocr_service_instance = DeepSeekOCRService()
     return _ocr_service_instance
 
 
+def main():
+    # Optional: setup environment variables (if not already set)
+    os.environ["OCR_MODEL_NAME"] = "prithivMLmods/DeepSeek-OCR-Latest-BF16.I64"
+    os.environ["OCR_DEVICE"] = "cuda"  # or "cpu" if no GPU
+
+    # Get global service instance (singleton)
+    ocr_service = get_ocr_service()
+
+    # Path to the image you want to process
+    image_path = "/home/admin/Pre-trained/testing_image.png"  # 🔁 change to your actual image file path
+
+    # Perform OCR
+    result = ocr_service.perform_ocr(
+        image_path=image_path,
+        prompt="Recognize and extract all text from this document.",
+        base_size=1024,
+        image_size=640,
+        crop_mode=True,
+        # save_results=True
+    )
+
+    # Print the output text and details
+    print("=== OCR Output ===")
+    print(result["text"])
+    print("\n=== Metadata ===")
+    for key, value in result["metadata"].items():
+        print(f"{key}: {value}")
+
+
+if __name__ == "__main__":
+    main()

@@ -105,6 +105,8 @@ class ChatCompletionRequest(BaseModel):
     stop: Optional[list[str]] = Field(default=None, description="Stop sequences")
     presence_penalty: Optional[float] = Field(default=0.0, ge=-2.0, le=2.0)
     frequency_penalty: Optional[float] = Field(default=0.0, ge=-2.0, le=2.0)
+    class Config:
+        extra = 'allow'
 
 
 class ChatCompletionChoice(BaseModel):

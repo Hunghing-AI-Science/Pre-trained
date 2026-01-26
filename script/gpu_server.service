@@ -1,0 +1,33 @@
+[Unit]
+Description=FastAPI - GPU Service
+After=network.target rabbitmq-server.service gpt_worker.service ocr_worker.service
+Wants=network.target rabbitmq-server.service gpt_worker.service ocr_worker.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/Pre-trained
+
+# Load environment from .env file
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/home/admin/Pre-trained/.env
+
+# Start FastAPI via Uvicorn using environment variables
+ExecStart=/home/admin/Pre-trained/.venv/bin/uvicorn src.gpu_server.api:app \
+    --host ${API_HOST} \
+    --port ${API_PORT} \
+    --workers ${API_WORKERS} \
+    --log-level ${API_LOG_LEVEL}
+
+# Automatically restart on failure
+Restart=always
+RestartSec=5
+KillMode=mixed
+
+# Logging
+StandardOutput=append:/var/log/gpu_server.out.log
+StandardError=append:/var/log/gpu_server.err.log
+
+[Install]
+WantedBy=multi-user.target

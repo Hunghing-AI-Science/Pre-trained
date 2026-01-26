@@ -1,0 +1,24 @@
+[Unit]
+Description=Celery Flower Service
+After=network.target rabbitmq-server.service
+Wants=network.target rabbitmq-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/admin/Pre-trained
+
+# Set environment variables
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/home/admin/Pre-trained/.env
+ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m celery -A src.gpu_server.celery_app:celery_app flower --port=5555 --broker_api=${BROKER_API} --loglevel=info
+
+Restart=always
+RestartSec=5
+KillMode=mixed
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -18,7 +18,7 @@ class GPTOSSService:
 
     def __new__(cls, model_name: str = None):
         """Implement per-model singleton pattern"""
-        model_name = model_name or os.getenv('GPT_MODEL_NAME', 'openai/gpt-oss-20b')
+        model_name = model_name or os.getenv('GPT_MODEL_NAME', 'openai/gpt-oss-120b')
 
         if model_name not in cls._instances:
             instance = super(GPTOSSService, cls).__new__(cls)

@@ -1,13 +1,11 @@
-import os
-# CRITICAL: Set multiprocessing start method FIRST, before any other imports
-# This must be done before importing torch, celery, or any CUDA-related code
-import multiprocessing
-try:
-    multiprocessing.set_start_method("spawn", force=True)
-except RuntimeError:
-    # Already set, that's fine
-    pass
+import torch.multiprocessing as mp
 
+from src.gpu_server.celery_app.logging_config import setup_logging
+
+mp.set_start_method("spawn", force=True)
+
+from celery import Celery
+import os
 from celery import Celery
 from kombu import Queue
 
@@ -26,6 +24,8 @@ CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "3000
 CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1"))
 CELERY_WORKER_MAX_TASKS_PER_CHILD = int(os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "1000"))
 
+setup_logging()
+
 task_queues = (
     Queue("ocr"),
     Queue("gpt"),
@@ -33,7 +33,7 @@ task_queues = (
 
 task_routes = {
     "src.gpu_server.celery_app.gpt_tasks.process_chat_completion": {"queue": "gpt"},
-    "src.gpu_server.celery_app.ocr_tasks.*": {"queue": "ocr"},
+    "src.gpu_server.celery_app.ocr_tasks.process_chat_completion": {"queue": "ocr"},
 }
 
 celery_app = Celery(
