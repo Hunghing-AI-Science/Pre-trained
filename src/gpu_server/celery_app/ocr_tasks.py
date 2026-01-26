@@ -1,4 +1,4 @@
-
+import celery
 from celery import Task
 from celery.worker.control import time_limit
 
@@ -15,26 +15,35 @@ load_dotenv()
 
 from typing import List, Dict, Optional
 
+import sys
+IS_FLOWER =  "flower" in sys.argv
+IS_CELERY_WORKER = "ocr_worker" in sys.argv
 logger = logging.getLogger(__name__)
 TIMEOUT = int(os.environ.get("CELERY_OCR_TIMEOUT", 300))
 
 
 # Load OCR service once at module import time - it will persist for worker lifetime
 logger.info("Initializing OCR service for worker process...")
+logger.info(f"IS_CELERY_WORKER: {IS_CELERY_WORKER}, IS_FLOWER: {IS_FLOWER}")
 
 ocr_service = None
 
+
 def get_shared_ocr_service():
-    """Get or initialize the shared GPT service for this worker process"""
+    """Initialize OCR service only on the worker, and only once per process."""
     global ocr_service
     if ocr_service is None:
-        logger.info("Initializing GPT service for worker process...")
-        ocr_service = get_ocr_service()
-        logger.info("GPT service initialized and ready")
+        from celery import current_app
+        # Only load in worker process, not when starting Flower
+        if IS_CELERY_WORKER:
+            logger.info("Worker detected — initializing OCR model...")
+            ocr_service = get_ocr_service()
+        else:
+            logger.info("Not a worker — skipping OCR model load (e.g., Flower process).")
     return ocr_service
 
 
-# ocr_service = get_ocr_service()
+ocr_service = get_shared_ocr_service()
 logger.info("OCR service initialized and ready")
 
 
@@ -75,7 +84,7 @@ def safe_perform_ocr(ocr_service, image_path, prompt, timeout=TIMEOUT):
             logger.debug(f"OCR took too long (>{timeout}s). Timeout!")
             return None
 
-@celery_app.task(base=DatabaseTask, bind=True, name="src.gpu_server.celery_app.ocr_tasks.process_chat_completion")
+@celery_app.task(base=DatabaseTask, bind=True, name="src.gpu_server.celery_app.ocr_tasks.process_chat_completion", max_retries = 0)
 def process_ocr_task(self, task_id: str, image_path: str, prompt: str):
     """
     Process OCR task using DeepSeek OCR model

@@ -12,14 +12,14 @@ WorkingDirectory=/home/admin/Pre-trained
 Environment="PYTHONUNBUFFERED=1"
 EnvironmentFile=/home/admin/Pre-trained/.env
 
-ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m celery  -A src.gpu_server.celery_app.celery_app worker -n gpt_worker --pool=solo -Q gpt --loglevel=info
+ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m celery  -A src.gpu_server.celery_app.celery_app worker -n gpt_worker --pool=solo -Q gpt --loglevel=debug
 
 Restart=always
 RestartSec=5
 KillMode=mixed
 
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:/home/admin/Pre-trained/logs/gpt_worker.log
+StandardError=append:/home/admin/Pre-trained/logs/gpt_worker.log
 
 [Install]
 WantedBy=multi-user.target

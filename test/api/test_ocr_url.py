@@ -73,7 +73,7 @@ class OCRAPIClient:
         image_data_uri = self.download_and_encode_image(image_url)
 
         # Step 2: Send to API
-        url = f"{self.base_url}/v1/ocr/chat/completions"
+        url = f"{self.base_url}/v1/ocr/completions"
 
         payload = {
             "model": "deepseek-ocr",
@@ -152,7 +152,7 @@ class OCRAPIClient:
         print("# Step 1: Download and encode image to base64")
         print(f"curl -s '{image_url}' | base64 > /tmp/image.b64")
         print("\n# Step 2: Send to OCR API")
-        print(f"""curl -X POST '{self.base_url}/v1/ocr/chat/completions' \\
+        print(f"""curl -X POST '{self.base_url}/v1/ocr/completions' \\
   -H 'Content-Type: application/json' \\
   -d '{{
     "model": "deepseek-ocr",
@@ -168,7 +168,7 @@ class OCRAPIClient:
   }}'""")
         print("\n# Or in one line (simpler):")
         print(f"""IMAGE_BASE64=$(curl -s '{image_url}' | base64 | tr -d '\\n')
-curl -X POST '{self.base_url}/v1/ocr/chat/completions' \\
+curl -X POST '{self.base_url}/v1/ocr/completions' \\
   -H 'Content-Type: application/json' \\
   -d '{{"model":"deepseek-ocr","messages":[{{"role":"user","content":[{{"type":"text","text":"{prompt}"}},{{"type":"image","image":"data:image/jpeg;base64,'"$IMAGE_BASE64"'"}}]}}]}}'""")
         print("=" * 80)
@@ -183,7 +183,7 @@ def test_ocr_from_internet():
     client = OCRAPIClient()
 
     # Example image URL - you can replace this with any image URL
-    image_url = "https://raw.githubusercontent.com/tesseract-ocr/docs/main/images/sample.png"
+    image_url = "https://lh5.googleusercontent.com/proxy/kuKDfpDNa6qnFEdbSwdtH-mlfR2FLNC_XR0gijFad0P5qa1pgjPOk2-pZVjP4SlRNNL_waT3cAD5NzONat2DoeDW7Uiw"
     prompt = "Extract all text from this image."
 
     # Print curl command
