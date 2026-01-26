@@ -42,8 +42,14 @@ class DatabaseTask(Task):
     def after_return(self, *args, **kwargs):
         """Clean up database connection after task completes"""
         if self._db is not None:
-            self._db.close()
-            self._db = None
+            try:
+                # Rollback any active transaction before closing
+                self._db.rollback()
+                self._db.close()
+            except Exception as e:
+                logger.warning(f"Error closing database session: {e}")
+            finally:
+                self._db = None
 
 
 # Import celery_app at the end to avoid circular import
@@ -148,5 +154,3 @@ def process_gpt_task(
         logger.error(traceback.format_exc())
 
         raise
-
-

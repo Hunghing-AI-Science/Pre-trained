@@ -1,4 +1,3 @@
-
 from celery import Task
 from src.gpu_server.celery_app.celery_app import celery_app
 from src.gpu_server.database import SessionLocal, OCRTask, GPTTask
@@ -40,8 +39,14 @@ class DatabaseTask(Task):
     def after_return(self, *args, **kwargs):
         """Clean up database connection after task completes"""
         if self._db is not None:
-            self._db.close()
-            self._db = None
+            try:
+                # Rollback any active transaction before closing
+                self._db.rollback()
+                self._db.close()
+            except Exception as e:
+                logger.warning(f"Error closing database session: {e}")
+            finally:
+                self._db = None
 
 
 @celery_app.task(base=DatabaseTask, bind=True, name="tasks.process_ocr", time_limit=180, soft_time_limit=170)
