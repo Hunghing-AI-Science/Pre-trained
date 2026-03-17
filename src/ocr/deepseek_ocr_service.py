@@ -35,6 +35,8 @@ class DeepSeekOCRService:
             self.model_name,
             trust_remote_code=True
         )
+        logger.info(f" Tokenizer loaded for model: {self.model_name}")
+        logger.info("Tokenizer loaded successfully")
 
         # Load model immediately if not already loaded
         if not DeepSeekOCRService._model_loaded:
@@ -66,14 +68,16 @@ class DeepSeekOCRService:
 
         DeepSeekOCRService._model = AutoModel.from_pretrained(
             self.model_name,
-            **model_kwargs
+            **model_kwargs,
+            dtype=torch.bfloat16 if self.torch_dtype == 'bfloat16' else torch.float16
+
         )
 
-        # Convert dtype and move to device
-        if self.torch_dtype == 'bfloat16':
-            DeepSeekOCRService._model = DeepSeekOCRService._model.to(torch.bfloat16)
-        elif self.torch_dtype == 'float16':
-            DeepSeekOCRService._model = DeepSeekOCRService._model.to(torch.float16)
+        # # Convert dtype and move to device
+        # if self.torch_dtype == 'bfloat16':
+        #     DeepSeekOCRService._model = DeepSeekOCRService._model.to(torch.bfloat16)
+        # elif self.torch_dtype == 'float16':
+        #     DeepSeekOCRService._model = DeepSeekOCRService._model.to(torch.float16)
 
         if self.device == 'cuda' and torch.cuda.is_available():
             DeepSeekOCRService._model = DeepSeekOCRService._model.cuda()

@@ -10,9 +10,10 @@ WorkingDirectory=/home/admin/Pre-trained
 
 # Set environment variables
 Environment="PYTHONUNBUFFERED=1"
+
 EnvironmentFile=/home/admin/Pre-trained/.env
 
-ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m celery  -A src.gpu_server.celery_app.celery_app worker -n ocr_worker --pool=solo -Q ocr  --loglevel=info
+ExecStart= /home/admin/Pre-trained/.venv/bin/python3.12 -m celery  -A src.gpu_server.celery_app.celery_app worker -n ocr_worker --pool=eventlet -c 1 -Q ocr  --loglevel=info
 
 Restart=always
 RestartSec=3

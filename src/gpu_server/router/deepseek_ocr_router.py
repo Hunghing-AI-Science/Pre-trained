@@ -171,7 +171,7 @@ async def create_ocr_chat_completion(
 
     # Poll the task status internally until completion, similar to GPT router behavior
     poll_interval = 1.0  # seconds
-    max_wait_time = 300  # 5 minutes timeout
+    max_wait_time = int(os.getenv("CELERY_OCR_TIMEOUT", 300))  # seconds
     start_time = time.time()
 
     async with httpx.AsyncClient() as client:
@@ -179,6 +179,19 @@ async def create_ocr_chat_completion(
             elapsed = time.time() - start_time
             if elapsed > max_wait_time:
                 logger.error(f"Task {task_id} timed out after {max_wait_time}s")
+
+                try:
+                    # Attempt to revoke the OCR Celery task to free GPU/CPU resources
+                    celery_app.control.revoke(task_id, terminate=True, signal='SIGTERM')
+                    logger.info(f"Revoked Celery task {task_id} after timeout.")
+                except Exception as revoke_error:
+                    logger.warning(f"Failed to revoke Celery task {task_id}: {revoke_error}")
+
+                # Mark the database task as failed due to timeout
+                db_task.status = "failed"
+                db_task.error = f"Timed out after {max_wait_time} seconds"
+                db.commit()
+
                 raise HTTPException(
                     status_code=504,
                     detail=f"Request timed out after {max_wait_time} seconds"

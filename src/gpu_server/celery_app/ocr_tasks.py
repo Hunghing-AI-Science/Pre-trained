@@ -1,3 +1,5 @@
+import multiprocessing
+
 import celery
 from celery import Task
 from celery.worker.control import time_limit
@@ -77,26 +79,62 @@ class DatabaseTask(Task):
                 self._db = None
 
 
-import concurrent.futures
 
-def safe_perform_ocr(ocr_service, image_path, prompt, timeout=TIMEOUT):
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(ocr_service.perform_ocr, image_path, prompt)
-        try:
-            result = future.result(timeout=timeout)
-            logger.debug(f"OCR result: {result}")
-            return result
-        except concurrent.futures.TimeoutError:
-            logger.debug(f"OCR took too long (>{timeout}s). Timeout!")
+
+
+def _ocr_worker(queue, service, image_path, prompt):
+    """Separate top-level OCR subprocess target"""
+    try:
+        result = service.perform_ocr(image_path, prompt)
+        queue.put(result)
+    except Exception as e:
+        logger.error(f"Error in OCR subprocess: {e}", exc_info=True)
+        queue.put({"error": str(e)})
+
+def perform_ocr_in_process(ocr_service, image_path, prompt, timeout):
+    """Run OCR in an isolated process with enforced timeout."""
+    queue = multiprocessing.Queue()
+    process = multiprocessing.Process(
+        target=_ocr_worker,
+        args=(queue, ocr_service, image_path, prompt)
+    )
+
+    process.start()
+    process.join(timeout)
+
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        logger.warning(f"OCR subprocess timed out after {timeout}s")
+        return None
+
+    if not queue.empty():
+        result = queue.get()
+        if isinstance(result, dict) and "error" in result:
+            logger.error(f"OCR subprocess reported error: {result['error']}")
             return None
+        return result
 
-@celery_app.task(base=DatabaseTask, bind=True, name="src.gpu_server.celery_app.ocr_tasks.process_chat_completion", max_retries = 0)
+    logger.warning("OCR subprocess finished with no result")
+    return None
+
+@celery_app.task(
+    base=DatabaseTask,
+    bind=True,
+    name="src.gpu_server.celery_app.ocr_tasks.process_chat_completion",
+    soft_time_limit=TIMEOUT - 5,  # warning signal before kill
+    time_limit=TIMEOUT,  # hard kill after TIMEOUT
+    max_retries=0
+)
 def process_ocr_task(self, task_id: str, image_path: str, prompt: str):
     """
     Process OCR task using DeepSeek OCR model
     """
+    logger.info(f"Processing OCR task {task_id}")
     db = self.db
     self.ocr_service = get_shared_ocr_service()
+    logger.info(f"OCR service: {self.ocr_service}. TIMEOUT: {TIMEOUT}s")
+    start_time = datetime.now(timezone.utc)
     try:
         # Update task status to processing
         task = db.query(OCRTask).filter(OCRTask.id == task_id).first()
@@ -105,12 +143,21 @@ def process_ocr_task(self, task_id: str, image_path: str, prompt: str):
 
         task.status = "processing"
         db.commit()
+        logger.info(f"OCR task {task_id} status updated to processing")
 
         # Perform OCR
-        ocr_result = safe_perform_ocr(self.ocr_service, image_path, prompt, timeout=TIMEOUT)        # Update task with results
+        ocr_result = perform_ocr_in_process(self.ocr_service, image_path, prompt, TIMEOUT)
+
+        logger.info(f"Received. OCR result: {ocr_result}")
+        end_time = datetime.now(timezone.utc)
+        logger.info(f"OCR task {task_id} completed in {(end_time - start_time).total_seconds()} seconds")
         if ocr_result is None:
             logger.debug(f"OCR processing for task {task_id} timed out")
-            raise TimeoutError("OCR processing timed out")
+            return {
+                "task_id": task_id,
+                "status": "failed",
+                "result": None
+            }
         task.status = "completed"
         task.result = {
             "text": ocr_result.get("text", ""),
