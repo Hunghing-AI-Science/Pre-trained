@@ -29,19 +29,25 @@ setup_logging()
 task_queues = (
     Queue("ocr"),
     Queue("gpt"),
+    Queue("vllm_ocr"),
 )
 
 task_routes = {
     "src.gpu_server.celery_app.gpt_tasks.process_chat_completion": {"queue": "gpt"},
     "src.gpu_server.celery_app.ocr_tasks.process_chat_completion": {"queue": "ocr"},
+    "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_task": {"queue": "vllm_ocr"},
+    "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_batch": {"queue": "vllm_ocr"},
 }
 
 celery_app = Celery(
     "gpu_server",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["src.gpu_server.celery_app.gpt_tasks",
-             "src.gpu_server.celery_app.ocr_tasks"],
+    include=[
+        "src.gpu_server.celery_app.gpt_tasks",
+        "src.gpu_server.celery_app.ocr_tasks",
+        "src.gpu_server.celery_app.vllm_ocr_tasks",
+    ],
 )
 
 # Discover tasks in the celery_app package
