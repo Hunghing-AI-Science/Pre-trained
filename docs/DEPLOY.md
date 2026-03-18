@@ -1,3 +1,4 @@
+```markdown
 
 ```bash
 uv sync --all 
@@ -49,6 +50,7 @@ sudo cp /home/admin/Pre-trained/script/celery-flower.service /etc/systemd/system
 sudo cp /home/admin/Pre-trained/script/gpt_worker.service /etc/systemd/system/gpt_worker.service
 sudo cp /home/admin/Pre-trained/script/gpu_server.service /etc/systemd/system/gpu_server.service
 sudo cp /home/admin/Pre-trained/script/ocr_worker.service /etc/systemd/system/ocr_worker.service
+sudo cp /home/admin/Pre-trained/script/vllm_ocr_worker.service /etc/systemd/system/vllm_ocr_worker.service
 
 
 # Reload systemd manager configuration
@@ -61,22 +63,25 @@ sudo systemctl enable gpu_server
 
 sudo systemctl enable ocr_worker
 sudo systemctl enable gpt_worker
+sudo systemctl enable vllm_ocr_worker
 # Start services immediately
 sudo systemctl start celery-flower
 sudo systemctl start gpt_worker
 sudo systemctl start gpu_server
 sudo systemctl start ocr_worker
+sudo systemctl start vllm_ocr_worker
 
 sudo systemctl restart celery-flower
 sudo systemctl restart gpt_worker
 sudo systemctl restart gpu_server
 sudo systemctl restart ocr_worker
+sudo systemctl restart vllm_ocr_worker
 ```
 
 
 # Check status of each service
 ```bash
-systemctl is-active celery-flower gpt_worker gpu_server rabbitmq-server ocr_worker
+systemctl is-active celery-flower gpt_worker gpu_server rabbitmq-server ocr_worker vllm_ocr_worker
 ```
 
 
@@ -86,6 +91,7 @@ sudo systemctl status ocr_worker
 sudo systemctl status gpt_worker
 sudo systemctl status gpu_server
 sudo systemctl status rabbitmq-server
+sudo systemctl status vllm_ocr_worker
 ```
 
 ```bash
@@ -93,6 +99,7 @@ sudo journalctl -u gpu_server.service -f
 sudo journalctl -u gpt_worker.service -f
 sudo journalctl -u ocr_worker.service -f
 sudo journalctl -u celery-flower.service -f
+sudo journalctl -u vllm_ocr_worker.service -f
 
 ```
 
@@ -103,7 +110,9 @@ sudo systemctl disable celery-flower
 sudo systemctl stop celery-flower
 sudo systemctl disable gpt_worker # GPT oss
 sudo systemctl stop gpt_worker
-sudo systemctl disable ocr_worker # deepseek 
+sudo systemctl disable ocr_worker # deepseek
 sudo systemctl stop ocr_worker
+sudo systemctl disable vllm_ocr_worker # deepseek vllm
+sudo systemctl stop vllm_ocr_worker
 
 ```

@@ -289,6 +289,94 @@ def test_live_dispatch(image_path: str, prompt: str = "Free OCR."):
 
 
 # ---------------------------------------------------------------------------
+# Example: call POST /v1/ocr/chat/completions with a real image file
+# Requires a running API server (python run_api.py) + vllm_ocr worker
+# ---------------------------------------------------------------------------
+
+def example_api_call(image_path: str, prompt: str = "Free OCR.",
+                     base_url: str = "http://localhost:8000"):
+    """
+    Example: send a base64-encoded image to POST /v1/ocr/chat/completions
+    and print the OCR text returned by the vLLM DeepSeek OCR backend.
+
+    Usage:
+        python test/test_vllm_ocr_task.py --example --image /path/to/image.png
+        # or via make:
+        make test-vllm-ocr-task-example IMAGE=/path/to/image.png
+    """
+    import base64
+    import requests
+
+    _sep(f"Example: POST /v1/ocr/chat/completions")
+    print(f"  server  : {base_url}")
+    print(f"  image   : {image_path}")
+    print(f"  prompt  : {prompt}")
+
+    # --- 1. Read & base64-encode the image ---
+    if not os.path.exists(image_path):
+        _warn(f"Image not found: {image_path} — skipping example")
+        return True
+
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+
+    ext = os.path.splitext(image_path)[1].lower().lstrip(".")
+    fmt_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png",
+               "gif": "gif", "bmp": "bmp", "webp": "webp"}
+    mime = fmt_map.get(ext, "jpeg")
+    b64  = base64.b64encode(image_bytes).decode("utf-8")
+    data_uri = f"data:image/{mime};base64,{b64}"
+    print(f"  encoded : {len(data_uri)} chars  ({len(image_bytes)} raw bytes)")
+
+    # --- 2. Build the request payload ---
+    payload = {
+        "model": "deepseek-ocr",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text",  "text": prompt},
+                    {"type": "image", "image": data_uri},
+                ],
+            }
+        ],
+    }
+
+    # --- 3. POST to the API ---
+    url = f"{base_url}/v1/ocr/chat/completions"
+    print(f"\n  → POST {url}")
+    try:
+        resp = requests.post(url, json=payload, timeout=300)
+    except requests.exceptions.ConnectionError:
+        _warn(f"Could not connect to {base_url} — is the API server running?")
+        return True
+
+    print(f"  ← HTTP {resp.status_code}")
+
+    if resp.status_code != 200:
+        _fail(f"Non-200 response: {resp.text[:300]}")
+        return False
+
+    data = resp.json()
+
+    # --- 4. Print result ---
+    ocr_text = data["choices"][0]["text"]
+    usage    = data.get("usage", {})
+
+    print(f"\n  ── OCR OUTPUT ──────────────────────────────────")
+    print(f"  {ocr_text[:600]}")
+    if len(ocr_text) > 600:
+        print("  ... (truncated)")
+    print(f"\n  model             : {data.get('model')}")
+    print(f"  task id           : {data.get('id')}")
+    print(f"  completion_tokens : {usage.get('completion_tokens', '–')}")
+    print(f"  ────────────────────────────────────────────────")
+
+    _ok("Example call completed successfully")
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -297,12 +385,20 @@ def main():
     parser.add_argument(
         "--image",
         default="/home/admin/Pre-trained/src/vllm/1752049668_7801_region_det_res.png",
-        help="Path to image for live GPU test",
+        help="Path to image for live GPU / example test",
     )
     parser.add_argument("--prompt", default="Free OCR.", help="OCR prompt")
     parser.add_argument(
         "--live", action="store_true",
         help="Run live dispatch test (requires broker + worker)",
+    )
+    parser.add_argument(
+        "--example", action="store_true",
+        help="Run the end-to-end API example (requires running server + worker)",
+    )
+    parser.add_argument(
+        "--base-url", default="http://localhost:8000",
+        help="Base URL of the API server for --example",
     )
     args = parser.parse_args()
 
@@ -320,6 +416,13 @@ def main():
         results["live_dispatch"] = test_live_dispatch(args.image, args.prompt)
     else:
         _warn("Live dispatch test skipped (pass --live to enable)")
+
+    if args.example:
+        results["example_api_call"] = example_api_call(
+            args.image, args.prompt, args.base_url
+        )
+    else:
+        _warn("API example skipped (pass --example to enable)")
 
     _sep("Summary")
     passed = sum(1 for v in results.values() if v)

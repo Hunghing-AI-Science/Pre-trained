@@ -160,11 +160,12 @@ async def create_ocr_chat_completion(
     db.add(db_task)
     db.commit()
 
-    # Enqueue Celery task
+    # Enqueue Celery task (vLLM backend)
     celery_app.send_task(
-        "src.gpu_server.celery_app.ocr_tasks.process_chat_completion",  # Task name registered in Celery
+        "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_task",
         args=[task_id, image_path, prompt],
-        task_id=task_id
+        task_id=task_id,
+        queue="vllm_ocr",
     )
 
     logger.info(f"OCR task {task_id} enqueued, polling for result...")
@@ -234,76 +235,3 @@ async def create_ocr_chat_completion(
                 )
 
             await asyncio.sleep(poll_interval)
-
-
-@router.get("/tasks/{task_id}", response_model=OCRTaskStatus)
-async def get_ocr_task_status(
-    task_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Get the status and result of an OCR task
-    """
-    task = db.query(OCRTask).filter(OCRTask.id == task_id).first()
-
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    response_data = {
-        "id": task.id,
-        "status": task.status,
-        "created_at": task.created_at,
-        "updated_at": task.updated_at,
-        "error": task.error
-    }
-
-    # If task is completed, format result in OpenAI style
-    if task.status == "completed" and task.result:
-        created_timestamp = int(task.created_at.timestamp())
-
-        response_data["result"] = OCRResponse(
-            id=task.id,
-            created=created_timestamp,
-            model="deepseek-ocr",
-            choices=[
-                OCRChoice(
-                    index=0,
-                    text=task.result.get("text", ""),
-                    finish_reason="stop"
-                )
-            ],
-            usage=Usage(
-                prompt_tokens=task.result.get("usage", {}).get("prompt_tokens", 0),
-                completion_tokens=task.result.get("usage", {}).get("completion_tokens", 0),
-                total_tokens=task.result.get("usage", {}).get("total_tokens", 0)
-            )
-        )
-
-    return OCRTaskStatus(**response_data)
-
-
-@router.delete("/tasks/{task_id}")
-async def delete_ocr_task(
-    task_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Delete an OCR task and its associated files
-    """
-    task = db.query(OCRTask).filter(OCRTask.id == task_id).first()
-
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    # Delete associated image file if exists
-    if task.image_path and os.path.exists(task.image_path):
-        try:
-            os.remove(task.image_path)
-        except Exception as e:
-            logger.warning(f"Failed to delete file {task.image_path}: {str(e)}")
-
-    # Delete task from database
-    db.delete(task)
-    db.commit()
-
-    return {"status": "deleted", "id": task_id}
