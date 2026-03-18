@@ -3,18 +3,17 @@ from sqlalchemy.orm import Session
 from src.gpu_server.database import get_db, OCRTask
 from src.gpu_server.schemas import (
     OCRResponse, OCRChoice, Usage,
-    OCRTaskStatus,
     OCRCompletionRequest
 )
-from src.gpu_server.celery_app.celery_app import celery_app
+from src.vllm.deepseek_ocr_vllm_service import get_vllm_ocr_service
 import uuid
 import os
 import logging
 import base64
 import re
-import httpx
 import asyncio
 import time
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +71,10 @@ async def create_ocr_chat_completion(
     db: Session = Depends(get_db)
 ):
     """
-    Create an OCR completion task (Simplified format)
+    Create an OCR completion using the vLLM DeepSeek OCR backend directly.
 
-    This endpoint accepts JSON requests with base64 encoded images:
+    Accepts JSON requests with base64 encoded images:
 
-    Example:
     ```json
     {
       "model": "deepseek-ocr",
@@ -84,33 +82,22 @@ async def create_ocr_chat_completion(
         {
           "role": "user",
           "content": [
-            {
-              "type": "text",
-              "text": "Extract all text from this image"
-            },
-            {
-              "type": "image",
-              "image": "data:image/jpeg;base64,/9j/4AAQ..."
-            }
+            {"type": "text",  "text": "Extract all text from this image"},
+            {"type": "image", "image": "data:image/jpeg;base64,/9j/4AAQ..."}
           ]
         }
       ]
     }
     ```
-
-    Returns the final OCR result after internally polling for completion. The task ID
-    is preserved in the response for traceability.
     """
-    # Extract prompt and image from messages
+    # ── 1. Parse prompt and image from messages ───────────────────────────
     prompt = "Free OCR."
     image_data = None
 
     for message in request.messages:
         if isinstance(message.content, str):
-            # Simple text message
             prompt = message.content
         elif isinstance(message.content, list):
-            # Multimodal content
             for part in message.content:
                 if part.type == "text" and part.text:
                     prompt = part.text
@@ -122,116 +109,89 @@ async def create_ocr_chat_completion(
             status_code=400,
             detail="No image provided. Include an 'image' content part with base64 data."
         )
-
-    # Only accept base64 data URIs
     if not image_data.startswith("data:image/"):
         raise HTTPException(
             status_code=400,
             detail="Only base64 encoded images are supported. Use format: data:image/jpeg;base64,..."
         )
 
-    # Generate task ID
+    # ── 2. Decode base64 image and save to disk ───────────────────────────
     task_id = f"ocr_{uuid.uuid4().hex}"
-
     try:
-        # Extract base64 image
-        logger.info(f"Processing base64 encoded image")
         image_bytes, file_extension = extract_image_from_data_uri(image_data)
-
         image_path = os.path.join(UPLOAD_DIR, f"{task_id}{file_extension}")
-
         with open(image_path, "wb") as f:
             f.write(image_bytes)
-
-        logger.info(f"Saved base64 image to {image_path} ({len(image_bytes)} bytes)")
-
+        logger.info(f"[{task_id}] Saved image to {image_path} ({len(image_bytes)} bytes)")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
 
-    # Create task in database
+    # ── 3. Persist task row (pending) ─────────────────────────────────────
     db_task = OCRTask(
         id=task_id,
         status="pending",
         prompt=prompt,
-        image_path=image_path
+        image_path=image_path,
+        model_name="deepseek-ocr",
     )
     db.add(db_task)
     db.commit()
 
-    # Enqueue Celery task (vLLM backend)
-    celery_app.send_task(
-        "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_task",
-        args=[task_id, image_path, prompt],
-        task_id=task_id,
-        queue="vllm_ocr",
+    # ── 4. Run vLLM inference (offloaded to thread so the event loop is free)
+    start_time = time.time()
+    try:
+        db_task.status = "processing"
+        db_task.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        loop = asyncio.get_event_loop()
+        ocr_service = get_vllm_ocr_service()
+        ocr_result = await loop.run_in_executor(
+            None,                          # default ThreadPoolExecutor
+            lambda: ocr_service.perform_ocr(image_path=image_path, prompt=prompt)
+        )
+
+        elapsed = time.time() - start_time
+        logger.info(f"[{task_id}] vLLM OCR completed in {elapsed:.2f}s")
+
+        # ── 5. Persist result ─────────────────────────────────────────────
+        db_task.status = "completed"
+        db_task.result = {
+            "text":     ocr_result.get("text", ""),
+            "metadata": ocr_result.get("metadata", {}),
+            "usage":    ocr_result.get("usage", {}),
+        }
+        db_task.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    except Exception as e:
+        logger.error(f"[{task_id}] vLLM OCR failed: {e}", exc_info=True)
+        db_task.status = "failed"
+        db_task.error = str(e)
+        db_task.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"OCR inference failed: {str(e)}")
+
+    # ── 6. Return response ────────────────────────────────────────────────
+    usage_data = db_task.result.get("usage", {})
+    return OCRResponse(
+        id=task_id,
+        object="ocr.completion",
+        created=int(db_task.created_at.timestamp()),
+        model="deepseek-ocr",
+        choices=[
+            OCRChoice(
+                index=0,
+                text=db_task.result.get("text", ""),
+                finish_reason="stop"
+            )
+        ],
+        usage=Usage(
+            prompt_tokens=usage_data.get("prompt_tokens", 0),
+            completion_tokens=usage_data.get("completion_tokens", 0),
+            total_tokens=usage_data.get("total_tokens", 0)
+        )
     )
 
-    logger.info(f"OCR task {task_id} enqueued, polling for result...")
-
-    # Poll the task status internally until completion, similar to GPT router behavior
-    poll_interval = 1.0  # seconds
-    max_wait_time = int(os.getenv("CELERY_OCR_TIMEOUT", 300))  # seconds
-    start_time = time.time()
-
-    async with httpx.AsyncClient() as client:
-        while True:
-            elapsed = time.time() - start_time
-            if elapsed > max_wait_time:
-                logger.error(f"Task {task_id} timed out after {max_wait_time}s")
-
-                try:
-                    # Attempt to revoke the OCR Celery task to free GPU/CPU resources
-                    celery_app.control.revoke(task_id, terminate=True, signal='SIGTERM')
-                    logger.info(f"Revoked Celery task {task_id} after timeout.")
-                except Exception as revoke_error:
-                    logger.warning(f"Failed to revoke Celery task {task_id}: {revoke_error}")
-
-                # Mark the database task as failed due to timeout
-                db_task.status = "failed"
-                db_task.error = f"Timed out after {max_wait_time} seconds"
-                db.commit()
-
-                raise HTTPException(
-                    status_code=504,
-                    detail=f"Request timed out after {max_wait_time} seconds"
-                )
-
-            db.refresh(db_task)
-            task_status = db_task.status
-
-            if task_status == "completed":
-                logger.info(f"Task {task_id} completed in {elapsed:.1f}s")
-
-                result_text = db_task.result.get("text", "") if db_task.result else ""
-                usage_data = db_task.result.get("usage", {}) if db_task.result else {}
-
-                return OCRResponse(
-                    id=task_id,
-                    object="ocr.completion",
-                    created=int(db_task.created_at.timestamp()),
-                    model="deepseek-ocr",
-                    choices=[
-                        OCRChoice(
-                            index=0,
-                            text=result_text,
-                            finish_reason="stop"
-                        )
-                    ],
-                    usage=Usage(
-                        prompt_tokens=usage_data.get("prompt_tokens", 0),
-                        completion_tokens=usage_data.get("completion_tokens", 0),
-                        total_tokens=usage_data.get("total_tokens", 0)
-                    )
-                )
-
-            if task_status == "failed":
-                error_msg = db_task.error or "Unknown error"
-                logger.error(f"Task {task_id} failed: {error_msg}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Task failed: {error_msg}"
-                )
-
-            await asyncio.sleep(poll_interval)

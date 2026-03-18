@@ -1,3 +1,4 @@
+import sys
 from celery import Task
 from src.gpu_server.database import SessionLocal, GPTTask
 from src.gpt_oss.gpt_oss_service import get_gpt_service
@@ -9,6 +10,9 @@ from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+IS_FLOWER = "flower" in sys.argv
+IS_CELERY_WORKER = "gpt_worker" in sys.argv
+
 # Initialize global GPT service variable
 gpt_service = None
 
@@ -16,10 +20,20 @@ def get_shared_gpt_service():
     """Get or initialize the shared GPT service for this worker process"""
     global gpt_service
     if gpt_service is None:
-        logger.info("Initializing GPT service for worker process...")
-        gpt_service = get_gpt_service()
-        logger.info("GPT service initialized and ready")
+        if IS_FLOWER:
+            logger.info("[gpt_worker] Flower process detected — skipping GPT model load.")
+        elif IS_CELERY_WORKER:
+            logger.info("[gpt_worker] Worker detected — initializing GPT service...")
+            gpt_service = get_gpt_service()
+            logger.info("[gpt_worker] GPT service initialized and ready.")
+        else:
+            logger.debug("[gpt_worker] Not a gpt_worker process — skipping GPT model load.")
     return gpt_service
+
+
+# Eagerly pre-load inside a real gpt_worker so the model is warm before the first task
+if IS_CELERY_WORKER:
+    get_shared_gpt_service()
 
 
 class DatabaseTask(Task):

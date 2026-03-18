@@ -5,9 +5,8 @@ from celery import Task
 from celery.worker.control import time_limit
 
 from src.gpu_server.celery_app.celery_app import celery_app
-from src.gpu_server.database import SessionLocal, OCRTask, GPTTask
+from src.gpu_server.database import SessionLocal, OCRTask
 from src.ocr.deepseek_ocr_service import get_ocr_service
-from src.gpt_oss.gpt_oss_service import get_gpt_service
 import traceback
 from datetime import datetime, timezone
 import logging
@@ -18,35 +17,32 @@ load_dotenv()
 from typing import List, Dict, Optional
 
 import sys
-IS_FLOWER =  "flower" in sys.argv
-IS_CELERY_WORKER = "ocr_worker" in sys.argv
+IS_FLOWER = "flower" in sys.argv
+IS_CELERY_WORKER = "ocr_worker" in sys.argv  # exact element match: won't match "vllm_ocr_worker"
 logger = logging.getLogger(__name__)
 TIMEOUT = int(os.environ.get("CELERY_OCR_TIMEOUT", 300))
-
-
-# Load OCR service once at module import time - it will persist for worker lifetime
-logger.info("Initializing OCR service for worker process...")
-logger.info(f"IS_CELERY_WORKER: {IS_CELERY_WORKER}, IS_FLOWER: {IS_FLOWER}")
 
 ocr_service = None
 
 
 def get_shared_ocr_service():
-    """Initialize OCR service only on the worker, and only once per process."""
+    """Initialize OCR service only on the ocr_worker process, and only once."""
     global ocr_service
     if ocr_service is None:
-        from celery import current_app
-        # Only load in worker process, not when starting Flower
-        if IS_CELERY_WORKER:
-            logger.info("Worker detected — initializing OCR model...")
+        if IS_FLOWER:
+            logger.info("[ocr_worker] Flower process detected — skipping OCR model load.")
+        elif IS_CELERY_WORKER:
+            logger.info("[ocr_worker] Worker detected — initializing OCR model...")
             ocr_service = get_ocr_service()
+            logger.info("[ocr_worker] OCR service initialized and ready.")
         else:
-            logger.info("Not a worker — skipping OCR model load (e.g., Flower process).")
+            logger.debug("[ocr_worker] Not an ocr_worker process — skipping OCR model load.")
     return ocr_service
 
 
-ocr_service = get_shared_ocr_service()
-logger.info("OCR service initialized and ready")
+# Eagerly pre-load inside a real ocr_worker so the model is warm before the first task
+if IS_CELERY_WORKER:
+    get_shared_ocr_service()
 
 
 class DatabaseTask(Task):
