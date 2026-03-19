@@ -112,6 +112,7 @@ class DeepSeekOCRVllmService:
 
         logger.info(f"Loading image: {image_path}")
         image = Image.open(image_path).convert("RGB")
+        image = image.resize((1024, 1024), Image.LANCZOS)
 
         formatted_prompt = f"<image>\n{prompt}"
         model_input = [
@@ -163,6 +164,7 @@ class DeepSeekOCRVllmService:
         model_inputs = []
         for req in requests:
             image = Image.open(req["image_path"]).convert("RGB")
+            image = image.resize((1024, 1024), Image.LANCZOS)
             formatted_prompt = f"<image>\n{req.get('prompt', 'Free OCR.')}"
             model_inputs.append(
                 {

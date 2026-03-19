@@ -5,7 +5,6 @@ mp.set_start_method("spawn", force=True)
 
 from celery import Celery
 import os
-from celery import Celery
 from kombu import Queue
 
 
