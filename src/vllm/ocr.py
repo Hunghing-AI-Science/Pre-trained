@@ -64,7 +64,7 @@ t2 = time.perf_counter()
 # ============================================================
 IMAGE_CONFIGS = [
     {
-        "path": f"/home/admin/Pre-trained/src/vllm/1752049668_7801_region_det_res.png",
+        "path": f"/home/admin/Pre-trained/temp.png",
         "prompt": "<image>\nFree OCR.",
     },
     # {

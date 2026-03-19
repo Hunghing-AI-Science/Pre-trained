@@ -41,7 +41,7 @@ class GPTOSSService:
             return
 
         self.cache_dir = os.getenv('GPT_MODEL_CACHE_DIR', None)
-        self.torch_dtype = os.getenv('GPT_TORCH_DTYPE', 'auto')
+        self.torch_dtype = 'auto'
 
         # Smart device detection: cuda -> mps -> cpu
         env_device = os.getenv('GPT_DEVICE', None)
@@ -100,6 +100,7 @@ class GPTOSSService:
             "model": self.model_name,
             "torch_dtype": self.torch_dtype,
             "device_map": self.device if self.device != 'mps' else None,  # MPS doesn't support device_map
+            "trust_remote_code": True
         }
 
         # For MPS, set device directly

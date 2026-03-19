@@ -5,7 +5,7 @@ from src.gpu_server.schemas import (
     OCRResponse, OCRChoice, Usage,
     OCRCompletionRequest
 )
-from src.gpu_server.celery_app.celery_app import celery_app
+from src.gpu_server.celery_app.celery_app import app
 import uuid
 import os
 import logging
@@ -143,7 +143,7 @@ async def create_ocr_chat_completion(
     db.commit()
 
     # ── 4. Dispatch to vllm_ocr Celery worker ────────────────────────────
-    celery_app.send_task(
+    app.send_task(
         "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_task",
         args=[task_id, image_path, prompt],
         task_id=task_id,
@@ -163,7 +163,7 @@ async def create_ocr_chat_completion(
             if elapsed > max_wait_time:
                 logger.error(f"[{task_id}] Timed out after {max_wait_time}s")
                 try:
-                    celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
+                    app.control.revoke(task_id, terminate=True, signal="SIGTERM")
                     logger.info(f"[{task_id}] Celery task revoked.")
                 except Exception as revoke_err:
                     logger.warning(f"[{task_id}] Failed to revoke task: {revoke_err}")

@@ -16,7 +16,7 @@ from src.gpu_server.schemas import (
     Usage
 )
 from src.gpu_server.database import get_db, GPTTask
-from src.gpu_server.celery_app.celery_app import celery_app  # ✅ Only import celery_app, not tasks
+from src.gpu_server.celery_app.celery_app import app
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ async def create_chat_completion(
 
     logger.info("Task created in database with ID: %s", task_id)
     # Enqueue Celery task using send_task (no import of heavy task implementation needed)
-    celery_app.send_task(
+    app.send_task(
         TASK_NAME,  # Task name registered in Celery
         kwargs={
             'task_id': task_id,

@@ -1,7 +1,6 @@
 import torch.multiprocessing as mp
 
 from src.gpu_server.celery_app.logging_config import setup_logging
-
 mp.set_start_method("spawn", force=True)
 
 from celery import Celery
@@ -11,8 +10,8 @@ from kombu import Queue
 
 
 # Load Celery configuration from environment variables
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@localhost:5672//")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "rpc://")
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", None)
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", None)
 CELERY_TASK_SERIALIZER = os.getenv("CELERY_TASK_SERIALIZER", "json")
 CELERY_ACCEPT_CONTENT = os.getenv("CELERY_ACCEPT_CONTENT", "json").split(",")
 CELERY_RESULT_SERIALIZER = os.getenv("CELERY_RESULT_SERIALIZER", "json")
@@ -36,10 +35,10 @@ task_routes = {
     "src.gpu_server.celery_app.gpt_tasks.process_chat_completion": {"queue": "gpt"},
     "src.gpu_server.celery_app.ocr_tasks.process_chat_completion": {"queue": "ocr"},
     "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_task": {"queue": "vllm_ocr"},
-    "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_batch": {"queue": "vllm_ocr"},
+    # "src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_batch": {"queue": "vllm_ocr"},
 }
 
-celery_app = Celery(
+app = Celery(
     "gpu_server",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
@@ -51,11 +50,12 @@ celery_app = Celery(
 )
 
 # Discover tasks in the celery_app package
-celery_app.autodiscover_tasks([
+app.autodiscover_tasks([
     "src.gpu_server.celery_app"
 ])
 
-celery_app.conf.update(
+
+app.conf.update(
     task_serializer=CELERY_TASK_SERIALIZER,
     accept_content=CELERY_ACCEPT_CONTENT,
     result_serializer=CELERY_RESULT_SERIALIZER,

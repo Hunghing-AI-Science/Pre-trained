@@ -1,4 +1,7 @@
 import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+
+BASE_DIR = "/home/auusgx10/PycharmProjects/vllm_testing"
 import logging
 from typing import Dict, Any, Optional, List
 
@@ -28,9 +31,7 @@ class DeepSeekOCRVllmService:
 
         # ---- Config from environment ----
         self.model_name = os.getenv("VLLM_OCR_MODEL_NAME", "deepseek-ai/DeepSeek-OCR")
-        self.gpu_memory_utilization = float(
-            os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.85")
-        )
+        self.gpu_memory_utilization = 0.1
         self.max_tokens = int(os.getenv("VLLM_OCR_MAX_TOKENS", "8192"))
         self.ngram_size = int(os.getenv("VLLM_OCR_NGRAM_SIZE", "30"))
         self.window_size = int(os.getenv("VLLM_OCR_WINDOW_SIZE", "90"))

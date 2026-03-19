@@ -24,7 +24,7 @@ def get_shared_gpt_service():
             logger.info("[gpt_worker] Flower process detected — skipping GPT model load.")
         elif IS_CELERY_WORKER:
             logger.info("[gpt_worker] Worker detected — initializing GPT service...")
-            gpt_service = get_gpt_service()
+            gpt_service = get_gpt_service('openai/gpt-oss-120b')
             logger.info("[gpt_worker] GPT service initialized and ready.")
         else:
             logger.debug("[gpt_worker] Not a gpt_worker process — skipping GPT model load.")
@@ -67,9 +67,9 @@ class DatabaseTask(Task):
 
 
 # Import celery_app at the end to avoid circular import
-from src.gpu_server.celery_app.celery_app import celery_app
+from src.gpu_server.celery_app.celery_app import app
 
-@celery_app.task(base=DatabaseTask, bind=True, name="src.gpu_server.celery_app.gpt_tasks.process_chat_completion")
+@app.task(base=DatabaseTask, bind=True, name="src.gpu_server.celery_app.gpt_tasks.process_chat_completion")
 def process_gpt_task(
     self,
     task_id: str,

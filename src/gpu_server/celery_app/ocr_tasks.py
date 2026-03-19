@@ -4,7 +4,7 @@ import celery
 from celery import Task
 from celery.worker.control import time_limit
 
-from src.gpu_server.celery_app.celery_app import celery_app
+from src.gpu_server.celery_app.celery_app import app
 from src.gpu_server.database import SessionLocal, OCRTask
 from src.ocr.deepseek_ocr_service import get_ocr_service
 import traceback
@@ -114,7 +114,7 @@ def perform_ocr_in_process(ocr_service, image_path, prompt, timeout):
     logger.warning("OCR subprocess finished with no result")
     return None
 
-@celery_app.task(
+@app.task(
     base=DatabaseTask,
     bind=True,
     name="src.gpu_server.celery_app.ocr_tasks.process_chat_completion",

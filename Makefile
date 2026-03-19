@@ -2,12 +2,12 @@
 # Makefile — Pre-trained GPU Server
 # ============================================================
 PYTHON   ?= python
-PROJECT  ?= /Users/matisse.tsang/PycharmProjects/Pre-trained
+PROJECT  ?= ./
 IMAGE    ?= /home/admin/Pre-trained/src/vllm/1752049668_7801_region_det_res.png
 PROMPT   ?= Free OCR.
 BASE_URL ?= http://localhost:8000
 
-SERVICES := gpu_server gpt_worker ocr_worker vllm_ocr_worker celery-flower
+SERVICES := gpu_server gpt_worker vllm_ocr_worker celery-flower
 
 .PHONY: help test-all \
         install deploy \
@@ -40,7 +40,7 @@ help:
 # ── Tests ──────────────────────────────────────────────────────
 
 test-all:
-	cd $(PROJECT) && $(PYTHON) test/test_vllm_ocr_service.py --skip-gpu
+	cd $(PROJECT) && $(PYTHON) test/test_vllm_ocr_service.py
 	cd $(PROJECT) && $(PYTHON) test/test_vllm_ocr_task.py
 
 # ── Systemd deploy ─────────────────────────────────────────────
@@ -51,7 +51,6 @@ SYSTEMD_DIR := /etc/systemd/system
 install:
 	sudo cp $(SCRIPT_DIR)/gpu_server.service        $(SYSTEMD_DIR)/gpu_server.service
 	sudo cp $(SCRIPT_DIR)/gpt_worker.service        $(SYSTEMD_DIR)/gpt_worker.service
-	sudo cp $(SCRIPT_DIR)/ocr_worker.service        $(SYSTEMD_DIR)/ocr_worker.service
 	sudo cp $(SCRIPT_DIR)/vllm_ocr_worker.service   $(SYSTEMD_DIR)/vllm_ocr_worker.service
 	sudo cp $(SCRIPT_DIR)/celery-flower.service     $(SYSTEMD_DIR)/celery-flower.service
 	sudo systemctl daemon-reload

@@ -9,7 +9,7 @@ model = model.eval().cuda().to(torch.bfloat16)
 
 prompt = "<image>\n Could you give me the title of this image ?"
 # prompt = "<image>\n<|grounding|>Convert the document to markdown. "
-image_file = '/home/admin/Pre-trained/src/ocr/farm_sounds_bg.png'
+image_file = '/home/admin/Pre-trained/temp.png'
 output_path = './'
 
 res =  model.infer(

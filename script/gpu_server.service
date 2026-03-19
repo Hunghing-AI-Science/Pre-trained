@@ -1,7 +1,7 @@
 [Unit]
 Description=FastAPI - GPU Service
-After=network.target rabbitmq-server.service gpt_worker.service ocr_worker.service vllm_ocr_worker.service
-Wants=network.target rabbitmq-server.service gpt_worker.service ocr_worker.service vllm_ocr_worker.service
+After=network.target rabbitmq-server.service gpt_worker.service vllm_ocr_worker.service
+Wants=network.target rabbitmq-server.service gpt_worker.service vllm_ocr_worker.service
 
 [Service]
 Type=simple

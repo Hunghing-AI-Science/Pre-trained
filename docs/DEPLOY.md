@@ -1,9 +1,21 @@
-```markdown
+
 
 ```bash
-uv sync --all 
+uv sync --upgrade --extra all 
 
+export VLLM_VERSION=$(curl -s https://api.github.com/repos/vllm-project/vllm/releases/latest | jq -r .tag_name | sed 's/^v//')
+export CUDA_VERSION=130 # or other
+export CPU_ARCH=$(uname -m) # x86_64 or aarch64
+
+uv pip install \
+  https://github.com/vllm-project/vllm/releases/download/v${VLLM_VERSION}/vllm-${VLLM_VERSION}+cu${CUDA_VERSION}-cp38-abi3-manylinux_2_35_${CPU_ARCH}.whl \
+  --extra-index-url https://download.pytorch.org/whl/cu${CUDA_VERSION} \
+  --index-strategy unsafe-best-match \
+  --prerelease=allow
+  
 ```
+
+
 
 ```bash
 ```
@@ -60,21 +72,19 @@ sudo systemctl daemon-reload
 sudo systemctl enable celery-flower
 
 sudo systemctl enable gpu_server
-
-sudo systemctl enable ocr_worker
 sudo systemctl enable gpt_worker
 sudo systemctl enable vllm_ocr_worker
+
 # Start services immediately
 sudo systemctl start celery-flower
 sudo systemctl start gpt_worker
 sudo systemctl start gpu_server
-sudo systemctl start ocr_worker
+
 sudo systemctl start vllm_ocr_worker
 
 sudo systemctl restart celery-flower
 sudo systemctl restart gpt_worker
 sudo systemctl restart gpu_server
-sudo systemctl restart ocr_worker
 sudo systemctl restart vllm_ocr_worker
 ```
 

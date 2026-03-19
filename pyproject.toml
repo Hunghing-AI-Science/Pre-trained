@@ -6,10 +6,15 @@ requires-python = ">=3.12"
 
 # Base dependencies only — minimal runtime
 dependencies = [
+    "accelerate>=1.12.0",
+    "bitsandbytes>=0.49.2",
+    "celery>=5.6.2",
     "eventlet>=0.40.4",
     "gradio>=6.3.0",
     "openai>=2.15.0",
     "pydantic>=2.12.5",
+    "setuptools>=80.9.0",
+    "transformers>=4.57.3",
 ]
 
 # Optional dependency groups

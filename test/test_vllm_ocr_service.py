@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # ── Env defaults (override via real .env or shell exports on the GPU server) ─
 os.environ.setdefault("VLLM_OCR_MODEL_NAME", "deepseek-ai/DeepSeek-OCR")
-os.environ.setdefault("VLLM_GPU_MEMORY_UTILIZATION", "0.85")
+os.environ.setdefault("VLLM_GPU_MEMORY_UTILIZATION", "0.1")
 os.environ.setdefault("VLLM_OCR_MAX_TOKENS", "8192")
 os.environ.setdefault("VLLM_OCR_NGRAM_SIZE", "30")
 os.environ.setdefault("VLLM_OCR_WINDOW_SIZE", "90")

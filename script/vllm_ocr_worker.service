@@ -13,7 +13,7 @@ Environment="PYTHONUNBUFFERED=1"
 EnvironmentFile=/home/admin/Pre-trained/.env
 Environment="TRITON_PTXAS_PATH=/usr/local/cuda/bin/ptxas"
 
-ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m celery -A src.gpu_server.celery_app.celery_app worker -n vllm_ocr_worker --pool=solo -Q vllm_ocr --loglevel=info
+ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m  celery -A src.gpu_server.celery_app.celery_app worker     -n vllm_ocr_worker --pool=solo -Q vllm_ocr --loglevel=info
 
 Restart=always
 RestartSec=5

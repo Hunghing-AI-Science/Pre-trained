@@ -59,7 +59,7 @@ if IS_CELERY_WORKER:
 # Base task
 # ---------------------------------------------------------------------------
 
-from src.gpu_server.celery_app.celery_app import celery_app
+from src.gpu_server.celery_app.celery_app import app
 from src.gpu_server.database import SessionLocal, OCRTask
 
 
@@ -93,7 +93,7 @@ class VllmOCRDatabaseTask(Task):
 # Tasks
 # ---------------------------------------------------------------------------
 
-@celery_app.task(
+@app.task(
     base=VllmOCRDatabaseTask,
     bind=True,
     name="src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_task",
@@ -170,7 +170,7 @@ def process_vllm_ocr_task(
         raise
 
 
-@celery_app.task(
+@app.task(
     base=VllmOCRDatabaseTask,
     bind=True,
     name="src.gpu_server.celery_app.vllm_ocr_tasks.process_vllm_ocr_batch",
