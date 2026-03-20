@@ -14,14 +14,14 @@ Environment="FLOWER_UNAUTHENTICATED_API=true"
 #Environment="BROKER_URL=amqp://guest:guest@localhost:5672//"
 EnvironmentFile=/home/admin/Pre-trained/.env
 
-ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m celery -A src.gpu_server.celery_app:celery_app flower --port=5555 --broker=${CELERY_BROKER_URL} --loglevel=info
+ExecStart=/home/admin/Pre-trained/.venv/bin/python3.12 -m celery -A src.gpu_server.celery_app.celery_app flower --port=5555 --broker=${CELERY_BROKER_URL} --loglevel=info
 
 Restart=always
 RestartSec=5
 KillMode=mixed
 
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:/var/log/celery-flower.out.log
+StandardError=append:/var/log/celery-flower.err.log
 
 [Install]
 WantedBy=multi-user.target
